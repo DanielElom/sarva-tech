@@ -1,0 +1,214 @@
+/*
+ * GENERATED FILE — DO NOT EDIT.
+ * Source: lib/tokens.data.mjs   Generator: scripts/generate-tokens.mjs
+ * Regenerate with `pnpm tokens`.
+ *
+ * This file and lib/tokens.data.mjs are the only places a literal colour value
+ * is permitted to exist (CLAUDE.md 4.3). Neither lives under app/ or components/,
+ * so the hardcoded-colour grep over those directories returns nothing at all.
+ */
+
+
+/* Day is the :root default so a no-JS, no-preference visitor gets a
+   readable page. The theme script overrides before first paint. */
+:root,
+[data-theme='day'] {
+  --sv-surface-base: #F5F2EC;
+  --sv-surface-raised: #FFFFFF;
+  --sv-surface-frame: #E4E0D7;
+  --sv-surface-inverted: #001D13;
+  --sv-primary: #08241A;
+  --sv-muted: #4A5B52;
+  --sv-accent: #F59B02;
+  --sv-accent-text: #986001;
+  --sv-on-accent: #0A1410;
+  --sv-line: #E4E0D7;
+  --sv-line-strong: #4A5B52;
+  --sv-status-ok: #0C6B45;
+  --sv-status-warn: #986001;
+  --sv-status-down: #A32718;
+  --sv-shadow-elevated: 0 1px 2px 0 rgb(8 36 26 / 0.06), 0 10px 30px -12px rgb(8 36 26 / 0.16);
+  color-scheme: light;
+}
+
+[data-theme='night'] {
+  --sv-surface-base: #001D13;
+  --sv-surface-raised: #022C1E;
+  --sv-surface-frame: #121F1D;
+  --sv-surface-inverted: #F5F2EC;
+  --sv-primary: #E8F3EE;
+  --sv-muted: #8BA099;
+  --sv-accent: #F59B02;
+  --sv-accent-text: #F59B02;
+  --sv-on-accent: #0A1410;
+  --sv-line: #121F1D;
+  --sv-line-strong: #8BA099;
+  --sv-status-ok: #3FCF8E;
+  --sv-status-warn: #F59B02;
+  --sv-status-down: #FF8E7A;
+  --sv-shadow-elevated: 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 10px 30px -12px rgb(0 0 0 / 0.60);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --sv-surface-base: #001D13;
+    --sv-surface-raised: #022C1E;
+    --sv-surface-frame: #121F1D;
+    --sv-surface-inverted: #F5F2EC;
+    --sv-primary: #E8F3EE;
+    --sv-muted: #8BA099;
+    --sv-accent: #F59B02;
+    --sv-accent-text: #F59B02;
+    --sv-on-accent: #0A1410;
+    --sv-line: #121F1D;
+    --sv-line-strong: #8BA099;
+    --sv-status-ok: #3FCF8E;
+    --sv-status-warn: #F59B02;
+    --sv-status-down: #FF8E7A;
+    --sv-shadow-elevated: 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 10px 30px -12px rgb(0 0 0 / 0.60);
+    color-scheme: dark;
+  }
+}
+
+/* An inverted surface resolves the entire token set to the opposite theme,
+   so anything rendered inside it stays legible without special-case classes. */
+:root:not([data-theme]) [data-surface='inverted'] {
+  --sv-surface-base: #001D13;
+  --sv-surface-raised: #022C1E;
+  --sv-surface-frame: #121F1D;
+  --sv-surface-inverted: #F5F2EC;
+  --sv-primary: #E8F3EE;
+  --sv-muted: #8BA099;
+  --sv-accent: #F59B02;
+  --sv-accent-text: #F59B02;
+  --sv-on-accent: #0A1410;
+  --sv-line: #121F1D;
+  --sv-line-strong: #8BA099;
+  --sv-status-ok: #3FCF8E;
+  --sv-status-warn: #F59B02;
+  --sv-status-down: #FF8E7A;
+  --sv-shadow-elevated: 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 10px 30px -12px rgb(0 0 0 / 0.60);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) [data-surface='inverted'] {
+    --sv-surface-base: #F5F2EC;
+    --sv-surface-raised: #FFFFFF;
+    --sv-surface-frame: #E4E0D7;
+    --sv-surface-inverted: #001D13;
+    --sv-primary: #08241A;
+    --sv-muted: #4A5B52;
+    --sv-accent: #F59B02;
+    --sv-accent-text: #986001;
+    --sv-on-accent: #0A1410;
+    --sv-line: #E4E0D7;
+    --sv-line-strong: #4A5B52;
+    --sv-status-ok: #0C6B45;
+    --sv-status-warn: #986001;
+    --sv-status-down: #A32718;
+    --sv-shadow-elevated: 0 1px 2px 0 rgb(8 36 26 / 0.06), 0 10px 30px -12px rgb(8 36 26 / 0.16);
+    color-scheme: light;
+  }
+}
+
+[data-theme='night'] [data-surface='inverted'] {
+  --sv-surface-base: #F5F2EC;
+  --sv-surface-raised: #FFFFFF;
+  --sv-surface-frame: #E4E0D7;
+  --sv-surface-inverted: #001D13;
+  --sv-primary: #08241A;
+  --sv-muted: #4A5B52;
+  --sv-accent: #F59B02;
+  --sv-accent-text: #986001;
+  --sv-on-accent: #0A1410;
+  --sv-line: #E4E0D7;
+  --sv-line-strong: #4A5B52;
+  --sv-status-ok: #0C6B45;
+  --sv-status-warn: #986001;
+  --sv-status-down: #A32718;
+  --sv-shadow-elevated: 0 1px 2px 0 rgb(8 36 26 / 0.06), 0 10px 30px -12px rgb(8 36 26 / 0.16);
+  color-scheme: light;
+}
+
+[data-theme='day'] [data-surface='inverted'] {
+  --sv-surface-base: #001D13;
+  --sv-surface-raised: #022C1E;
+  --sv-surface-frame: #121F1D;
+  --sv-surface-inverted: #F5F2EC;
+  --sv-primary: #E8F3EE;
+  --sv-muted: #8BA099;
+  --sv-accent: #F59B02;
+  --sv-accent-text: #F59B02;
+  --sv-on-accent: #0A1410;
+  --sv-line: #121F1D;
+  --sv-line-strong: #8BA099;
+  --sv-status-ok: #3FCF8E;
+  --sv-status-warn: #F59B02;
+  --sv-status-down: #FF8E7A;
+  --sv-shadow-elevated: 0 1px 2px 0 rgb(0 0 0 / 0.45), 0 10px 30px -12px rgb(0 0 0 / 0.60);
+  color-scheme: dark;
+}
+
+@theme inline {
+  /* Colour — CLAUDE.md 4.1 / 4.2 */
+  --color-surface-base: var(--sv-surface-base);
+  --color-surface-raised: var(--sv-surface-raised);
+  --color-surface-frame: var(--sv-surface-frame);
+  --color-surface-inverted: var(--sv-surface-inverted);
+  --color-primary: var(--sv-primary);
+  --color-muted: var(--sv-muted);
+  --color-accent: var(--sv-accent);
+  --color-accent-text: var(--sv-accent-text);
+  --color-on-accent: var(--sv-on-accent);
+  --color-line: var(--sv-line);
+  --color-line-strong: var(--sv-line-strong);
+  --color-status-ok: var(--sv-status-ok);
+  --color-status-warn: var(--sv-status-warn);
+  --color-status-down: var(--sv-status-down);
+
+  /* Type scale — 4.5, modular, base 16px, ratio 1.2 */
+  --text-caption: 0.694rem;
+  --text-sm: 0.833rem;
+  --text-body: 1rem;
+  --text-lead: 1.2rem;
+  --text-h4: 1.44rem;
+  --text-h3: 1.728rem;
+  --text-h2: clamp(1.728rem, 1.35rem + 1.9vw, 2.074rem);
+  --text-h1: clamp(2.074rem, 1.55rem + 2.6vw, 2.986rem);
+  --text-display: clamp(2.488rem, 1.60rem + 4.4vw, 4.300rem);
+
+  /* Leading */
+  --leading-display: 0.98;
+  --leading-heading: 1.12;
+  --leading-snug: 1.35;
+  --leading-body: 1.65;
+
+  /* Tracking — caps is reserved for the systems-readout layer, 4.6 */
+  --tracking-display: -0.03em;
+  --tracking-heading: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-caps: 0.16em;
+
+  /* Radius — deliberate hierarchy, not one value everywhere */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  /* Single elevation treatment */
+  --shadow-elevated: var(--sv-shadow-elevated);
+
+  /* Layout rhythm */
+  --spacing-gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --spacing-section: clamp(4rem, 9vw, 7.5rem);
+  --container-page: 1200px;
+  --container-measure: 72ch;
+
+  /* Faces — bound to next/font in app/layout.tsx */
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+}
