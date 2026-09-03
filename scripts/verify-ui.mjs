@@ -253,23 +253,39 @@ try {
   for (const theme of ['night', 'day']) {
     await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
     await client.goto(ORIGIN + '/');
+    // Assert on EVERY inverted scope, and on the count. Querying only the
+    // first one let a broken home-page band pass because the footer's scope
+    // was found instead.
     const inv = await client.eval(`(() => {
-      const el = document.querySelector('[data-surface="inverted"]');
-      const cs = getComputedStyle(el);
-      const heading = el.querySelector('h2');
+      const els = [...document.querySelectorAll('[data-surface="inverted"]')];
       return {
+        count: els.length,
         page: getComputedStyle(document.body).backgroundColor,
-        panel: cs.backgroundColor,
-        headingColor: getComputedStyle(heading).color,
+        scopes: els.map(el => {
+          const heading = el.querySelector('h2');
+          return {
+            where: el.closest('footer') ? 'footer' : 'page body',
+            panel: getComputedStyle(el).backgroundColor,
+            headingColor: heading ? getComputedStyle(heading).color : null,
+          };
+        }),
       };
     })()`);
     const opposite = theme === 'night' ? 'day' : 'night';
+    const wantPanel = toRgb(colorTokens['surface-base'][opposite]);
+    const wantHeading = toRgb(colorTokens.primary[opposite]);
+    const allFlipped =
+      inv.count >= 2 &&
+      inv.page === toRgb(colorTokens['surface-base'][theme]) &&
+      inv.scopes.every(
+        (s) => s.panel === wantPanel && (s.headingColor === null || s.headingColor === wantHeading),
+      );
     check(
-      `In the ${theme} theme, an inverted surface resolves to the ${opposite} base`,
-      inv.panel === toRgb(colorTokens['surface-base'][opposite]) &&
-        inv.page === toRgb(colorTokens['surface-base'][theme]) &&
-        inv.headingColor === toRgb(colorTokens.primary[opposite]),
-      `page ${inv.page} / inverted band ${inv.panel} / its heading ${inv.headingColor} (${opposite} text-primary=${toRgb(colorTokens.primary[opposite])})`,
+      `In the ${theme} theme, every inverted surface resolves to the ${opposite} base`,
+      allFlipped,
+      `page ${inv.page}; ${inv.count} inverted scopes -> ` +
+        inv.scopes.map((s) => `${s.where}: bg ${s.panel}, h2 ${s.headingColor}`).join(' | ') +
+        ` (want bg ${wantPanel}, h2 ${wantHeading})`,
     );
   }
 

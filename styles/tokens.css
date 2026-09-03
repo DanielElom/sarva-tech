@@ -71,6 +71,13 @@
   }
 }
 
+@layer base {
+  [data-surface='inverted'] {
+    background-color: var(--sv-surface-base);
+    color: var(--sv-primary);
+  }
+}
+
 /* An inverted surface resolves the entire token set to the opposite theme,
    so anything rendered inside it stays legible without special-case classes. */
 :root:not([data-theme]) [data-surface='inverted'] {

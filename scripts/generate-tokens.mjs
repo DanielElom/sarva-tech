@@ -79,7 +79,20 @@ const invertedBlocks = themes.map(
 ${varsFor(other(theme))}
 }`,
 );
-sections.push(`/* An inverted surface resolves the entire token set to the opposite theme,
+// An inverted scope must re-declare `color` at its own root. Children inherit a
+// COMPUTED colour, not the `var()` reference, so text inside an inverted section
+// otherwise keeps the outer theme's colour while the background flips — legible
+// by luck in one theme and not the other. Declaring it here means marking a
+// section inverted is sufficient on its own; it is in `base` so ordinary
+// utilities still override it.
+sections.push(`@layer base {
+  [data-surface='inverted'] {
+    background-color: var(${PREFIX}-surface-base);
+    color: var(${PREFIX}-primary);
+  }
+}
+
+/* An inverted surface resolves the entire token set to the opposite theme,
    so anything rendered inside it stays legible without special-case classes. */
 :root:not([data-theme]) [data-surface='inverted'] {
 ${varsFor('night')}
