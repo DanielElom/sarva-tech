@@ -26,13 +26,13 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex min-h-dvh flex-col justify-center bg-surface-base">
+    <div className="bg-surface-base flex min-h-dvh flex-col justify-center">
       <Container as="section" className="py-section">
         <Readout tone="accent">HTTP 500 · Unhandled Exception</Readout>
-        <h1 className="mt-4 text-h1 leading-display tracking-display">
+        <h1 className="text-h1 leading-display tracking-display mt-4">
           Something on this page failed.
         </h1>
-        <p className="measure mt-6 text-lead text-muted">
+        <p className="measure text-lead text-muted mt-6">
           The rest of the site is unaffected. Try the page again — if it fails a second
           time, it is our problem and not yours.
         </p>

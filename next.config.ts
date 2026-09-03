@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
   // Next 16 no longer runs ESLint during `next build`, so `pnpm build` runs it
   // as a separate gate before compiling. Same outcome: lint errors fail the build.
   typescript: { ignoreBuildErrors: false },
+  experimental: {
+    // The stylesheet was the single render-blocking request on every route and
+    // showed up as ~2s of LCP render delay on throttled mobile. Inlining it
+    // removes that round trip; the CSS is small because it is all tokens.
+    inlineCss: true,
+  },
   env: {
     // Stamped at build time so /api/health can report honestly when it was built.
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),

@@ -14,7 +14,10 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "pnpm run tokens && node scripts/contrast.mjs && pnpm run typecheck && pnpm run build"
+    "verify": "pnpm run tokens && pnpm run contrast && pnpm run typecheck && pnpm run build",
+    "contrast": "node scripts/contrast.mjs",
+    "verify:ui": "node scripts/verify-ui.mjs",
+    "verify:bundles": "node scripts/bundle-sizes.mjs"
   },
   "dependencies": {
     "motion": "^13.2.0",

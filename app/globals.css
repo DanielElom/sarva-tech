@@ -110,41 +110,81 @@
 
   /*
    * The mobile navigation panel and its scrim. Transform and opacity only, so
-   * it stays on the compositor. `visibility` is in the transition list so the
-   * closed panel leaves the accessibility tree and hit-testing entirely once
-   * the transition finishes, rather than sitting invisible on top of the page.
+   * the animation stays on the compositor.
+   *
+   * Deliberately NOT `visibility`: a discrete property equals its start value
+   * at progress 0, which is exactly when the open effect runs, so a panel
+   * transitioning from hidden was still hidden when it tried to take focus and
+   * `.focus()` silently did nothing. `inert` already removes the closed panel
+   * from the tab order and the accessibility tree, which is what visibility was
+   * there for, and it applies instantly.
    */
   .sheet {
     transition:
       transform 280ms cubic-bezier(0.2, 0, 0, 1),
-      opacity 200ms ease-out,
-      visibility 280ms;
+      opacity 200ms ease-out;
   }
 
   .sheet[data-state='closed'] {
     transform: translateX(100%);
-    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .sheet[data-state='open'] {
     transform: translateX(0);
-    visibility: visible;
+    opacity: 1;
   }
 
   .scrim {
-    transition:
-      opacity 200ms ease-out,
-      visibility 200ms;
+    transition: opacity 200ms ease-out;
   }
 
   .scrim[data-state='closed'] {
     opacity: 0;
-    visibility: hidden;
+    pointer-events: none;
   }
 
   .scrim[data-state='open'] {
     opacity: 1;
-    visibility: visible;
+  }
+
+  /*
+   * Header compaction. Driven by the `data-compact` attribute that
+   * components/chrome/header-scroll.tsx sets, so the header itself stays a
+   * server component and this costs no JavaScript per frame.
+   */
+  .site-header {
+    background-color: var(--color-surface-base);
+    border-bottom: 1px solid transparent;
+    transition:
+      background-color 200ms ease-out,
+      border-color 200ms ease-out,
+      backdrop-filter 200ms ease-out;
+  }
+
+  .site-header[data-compact] {
+    border-bottom-color: var(--color-line);
+    background-color: color-mix(in srgb, var(--color-surface-base) 85%, transparent);
+    backdrop-filter: blur(12px);
+  }
+
+  .site-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 1rem;
+    transition: padding-block 200ms ease-out;
+  }
+
+  .site-header[data-compact] .site-header-bar {
+    padding-block: 0.625rem;
+  }
+
+  /* The wordmark steps down with the header rather than fighting it. */
+  .site-header[data-compact] .site-logo {
+    font-size: var(--text-body);
   }
 
   /* The single elevation treatment. One, not a ladder. */

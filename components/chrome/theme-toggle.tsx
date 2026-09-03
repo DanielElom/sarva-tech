@@ -27,8 +27,8 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-busy={!ready}
       className={cn(
         'inline-flex size-9 items-center justify-center rounded-sm',
-        'border border-line text-accent-text',
-        'transition-colors duration-150 hover:bg-surface-frame',
+        'border-line text-accent-text border',
+        'hover:bg-surface-frame transition-colors duration-150',
         className,
       )}
     >

@@ -16,7 +16,10 @@ export default function Page() {
         intro="Who we are, how we work, and why this company exists."
       />
       <Container as="section" className="pb-section">
-        <p className="measure text-muted">The about page is written in S6. This route exists now so the shell, navigation and metadata are complete.</p>
+        <p className="measure text-muted">
+          The about page is written in S6. This route exists now so the shell, navigation
+          and metadata are complete.
+        </p>
       </Container>
     </>
   );

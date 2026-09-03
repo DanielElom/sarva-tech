@@ -12,6 +12,6 @@ export function Container({
   as?: 'div' | 'header' | 'footer' | 'section' | 'nav';
 }) {
   return (
-    <Tag className={cn('mx-auto w-full max-w-page px-gutter', className)}>{children}</Tag>
+    <Tag className={cn('max-w-page px-gutter mx-auto w-full', className)}>{children}</Tag>
   );
 }

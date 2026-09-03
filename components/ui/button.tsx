@@ -28,8 +28,7 @@ const sizes: Record<Size, string> = {
  */
 const variants: Record<Variant, string> = {
   primary: 'bg-accent text-on-accent border border-accent-text hover:brightness-95',
-  secondary:
-    'bg-transparent text-primary border border-line-strong hover:bg-surface-frame',
+  secondary: 'bg-transparent text-primary border border-line-strong hover:bg-surface-frame',
   quiet: 'bg-transparent text-accent-text underline-offset-4 hover:underline px-0',
 };
 

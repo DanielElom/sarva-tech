@@ -23,8 +23,22 @@ pnpm lint                         # includes the no-hardcoded-colour rule
 pnpm build                        # lint, then next build
 pnpm verify                       # all of the above in order
 
-node scripts/bundle-sizes.mjs http://localhost:3000   # JS per route, gzipped (cap 200KB)
 ```
+
+Two checks need the production server running (`pnpm build && pnpm start`):
+
+```bash
+pnpm verify:bundles http://localhost:3000   # JS per route, gzipped (cap 200KB)
+pnpm verify:ui      http://localhost:3000   # drives real Chrome over CDP
+```
+
+`verify:ui` is not a smoke test. It asserts, against a real browser, that the
+theme attribute is set before first contentful paint, that an inverted surface
+resolves to the opposite theme's token values, that the focus ring is
+`accent-text`, that the mobile menu traps focus and restores it to its trigger,
+that reduced motion neutralises every transition while leaving the menu usable,
+and that the status line renders what `/api/health` actually returned. It needs
+no dependencies — Node 22's global WebSocket is enough to speak CDP.
 
 ## Colour
 

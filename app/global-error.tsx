@@ -49,8 +49,8 @@ export default function GlobalError({
             The application failed to start.
           </h1>
           <p style={{ color: color('muted', DEFAULT_THEME), marginTop: '1.5rem' }}>
-            Reload the page. If it keeps failing, message us on WhatsApp and we will look
-            at it.
+            Reload the page. If it keeps failing, message us on WhatsApp and we will look at
+            it.
           </p>
           {error.digest ? (
             <p style={{ color: color('muted', DEFAULT_THEME), marginTop: '1rem' }}>

@@ -30,17 +30,17 @@ export default function ContactPage() {
           <p className="mt-4">
             <a
               href={CONTACT.whatsappUrl}
-              className="rounded-xs text-lead text-accent-text underline-offset-4 hover:underline"
+              className="text-lead text-accent-text rounded-xs underline-offset-4 hover:underline"
             >
               WhatsApp {CONTACT.whatsappNumber}
             </a>
           </p>
-          <p className="mt-3 text-sm text-muted">
-            An email address goes live with the domain. We are not listing one we cannot
-            yet receive on.
+          <p className="text-muted mt-3 text-sm">
+            An email address goes live with the domain. We are not listing one we cannot yet
+            receive on.
           </p>
         </div>
-        <p className="measure mt-8 text-muted">
+        <p className="measure text-muted mt-8">
           The message form is built in S5, together with validation, rate limiting and the
           Supabase-first submission path.
         </p>

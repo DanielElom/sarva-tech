@@ -29,6 +29,10 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ['400', '500'],
   variable: '--font-jetbrains-mono',
   display: 'swap',
+  // Not preloaded: mono is reserved for small readout labels (CLAUDE.md 4.6),
+  // and preloading it competes for bandwidth with the display face that paints
+  // the largest element on the page.
+  preload: false,
 });
 
 export const metadata: Metadata = {

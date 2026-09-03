@@ -4,7 +4,8 @@ import { Container } from '@/components/ui/container';
 
 export const metadata: Metadata = {
   title: 'Work',
-  description: 'Case studies: what the problem was, what we built, and what changed as a result.',
+  description:
+    'Case studies: what the problem was, what we built, and what changed as a result.',
 };
 
 export default function Page() {
@@ -16,7 +17,11 @@ export default function Page() {
         intro="What the problem was, what we built, and what changed as a result."
       />
       <Container as="section" className="pb-section">
-        <p className="measure text-muted">Four case studies are published in S4, with client permission confirmed for each named client. This route exists now so the shell, navigation and metadata are complete.</p>
+        <p className="measure text-muted">
+          Four case studies are published in S4, with client permission confirmed for each
+          named client. This route exists now so the shell, navigation and metadata are
+          complete.
+        </p>
       </Container>
     </>
   );

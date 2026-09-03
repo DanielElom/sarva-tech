@@ -49,6 +49,14 @@ export function MobileMenu() {
   const [openedOn, setOpenedOn] = useState<string | null>(null);
   const open = openedOn === pathname;
 
+  /**
+   * The panel element is always present so it can transition, but its contents
+   * are not built until the menu is first opened. On a desktop load nothing in
+   * here is ever rendered or hydrated, and on mobile the cost moves off the
+   * initial load to the moment someone asks for it.
+   */
+  const [hasOpened, setHasOpened] = useState(false);
+
   const close = useCallback(() => setOpenedOn(null), []);
 
   // Escape closes, and Tab is confined to the panel.
@@ -103,23 +111,26 @@ export function MobileMenu() {
     };
   }, [open]);
 
-  // Focus in on open, back to the trigger on close.
+  /**
+   * Focus moves into the panel on open and back to the trigger on close.
+   *
+   * Synchronously, in the effect: the panel is always mounted, so there is no
+   * frame to wait for, and by the time effects run React has already removed
+   * `inert` in the same commit. Deferring this to requestAnimationFrame left a
+   * window in which any re-render (the header's own scroll listener fires when
+   * the body is locked) cancelled the callback and focus was never moved.
+   */
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open) {
       wasOpen.current = true;
-      // Wait a frame so the panel exists even when it is being animated in.
-      const id = requestAnimationFrame(() => {
-        const panel = panelRef.current;
-        panel?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-      });
-      return () => cancelAnimationFrame(id);
+      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      return;
     }
     if (wasOpen.current) {
       wasOpen.current = false;
       triggerRef.current?.focus();
     }
-    return undefined;
   }, [open]);
 
   return (
@@ -127,13 +138,16 @@ export function MobileMenu() {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpenedOn((value) => (value === pathname ? null : pathname))}
+        onClick={() => {
+          setHasOpened(true);
+          setOpenedOn((value) => (value === pathname ? null : pathname));
+        }}
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={open ? 'Close menu' : 'Open menu'}
         className={cn(
           'inline-flex size-9 items-center justify-center rounded-sm md:hidden',
-          'border border-line text-accent-text transition-colors duration-150',
+          'border-line text-accent-text border transition-colors duration-150',
           'hover:bg-surface-frame',
         )}
       >
@@ -155,7 +169,7 @@ export function MobileMenu() {
         aria-hidden="true"
         onClick={close}
         data-state={open ? 'open' : 'closed'}
-        className="scrim fixed inset-0 z-40 bg-surface-inverted/40 md:hidden"
+        className="scrim bg-surface-inverted/40 fixed inset-0 z-40 md:hidden"
       />
 
       <div
@@ -168,74 +182,80 @@ export function MobileMenu() {
         data-state={open ? 'open' : 'closed'}
         className={cn(
           'sheet fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col md:hidden',
-          'border-l border-line bg-surface-raised shadow-elevated',
+          'border-line bg-surface-raised shadow-elevated border-l',
         )}
       >
-        <div className="flex items-center justify-between border-b border-line px-gutter py-4">
-          <Logo size="sm" />
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Close menu"
-              className={cn(
-                'inline-flex size-9 items-center justify-center rounded-sm',
-                'border border-line text-accent-text transition-colors duration-150',
-                'hover:bg-surface-frame',
-              )}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                focusable="false"
-                className="size-[18px]"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <nav aria-label="Primary" className="flex-1 overflow-y-auto px-gutter py-6">
-          <ul className="flex flex-col gap-1">
-            {PRIMARY_NAV.map((link) => {
-              const active = pathname === link.href;
-              return (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'block rounded-sm py-3 font-display text-h4 tracking-heading',
-                      'transition-colors duration-150',
-                      active ? 'text-accent-text' : 'text-primary hover:text-accent-text',
-                    )}
+        {hasOpened ? (
+          <>
+            <div className="border-line px-gutter flex items-center justify-between border-b py-4">
+              <Logo size="sm" />
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Close menu"
+                  className={cn(
+                    'inline-flex size-9 items-center justify-center rounded-sm',
+                    'border-line text-accent-text border transition-colors duration-150',
+                    'hover:bg-surface-frame',
+                  )}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                    className="size-[18px]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
                   >
-                    {link.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+            </div>
 
-        <div className="border-t border-line px-gutter py-6">
-          <ButtonLink href={PRIMARY_CTA.href} className="w-full">
-            {PRIMARY_CTA.label}
-          </ButtonLink>
-          <a
-            href={CONTACT.whatsappUrl}
-            className="mt-4 inline-flex rounded-xs text-sm text-muted underline-offset-4 hover:text-accent-text hover:underline"
-          >
-            WhatsApp {CONTACT.whatsappNumber}
-          </a>
-          <Readout className="mt-4 block text-muted">Sarva Tech</Readout>
-        </div>
+            <nav aria-label="Primary" className="px-gutter flex-1 overflow-y-auto py-6">
+              <ul className="flex flex-col gap-1">
+                {PRIMARY_NAV.map((link) => {
+                  const active = pathname === link.href;
+                  return (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        aria-current={active ? 'page' : undefined}
+                        className={cn(
+                          'font-display text-h4 tracking-heading block rounded-sm py-3',
+                          'transition-colors duration-150',
+                          active
+                            ? 'text-accent-text'
+                            : 'text-primary hover:text-accent-text',
+                        )}
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+
+            <div className="border-line px-gutter border-t py-6">
+              <ButtonLink href={PRIMARY_CTA.href} className="w-full">
+                {PRIMARY_CTA.label}
+              </ButtonLink>
+              <a
+                href={CONTACT.whatsappUrl}
+                className="text-muted hover:text-accent-text mt-4 inline-flex rounded-xs text-sm underline-offset-4 hover:underline"
+              >
+                WhatsApp {CONTACT.whatsappNumber}
+              </a>
+              <Readout className="text-muted mt-4 block">Sarva Tech</Readout>
+            </div>
+          </>
+        ) : null}
       </div>
     </>
   );

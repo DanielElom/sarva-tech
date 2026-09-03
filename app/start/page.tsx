@@ -33,7 +33,10 @@ export default function StartPage() {
       <Container as="section" className="pb-section">
         <ol className="measure grid gap-3">
           {steps.map((step, index) => (
-            <li key={step} className="elevated flex items-center gap-4 rounded-md px-5 py-4">
+            <li
+              key={step}
+              className="elevated flex items-center gap-4 rounded-md px-5 py-4"
+            >
               <Readout className="text-accent-text">
                 {String(index + 1).padStart(2, '0')}
               </Readout>
@@ -41,7 +44,7 @@ export default function StartPage() {
             </li>
           ))}
         </ol>
-        <p className="measure mt-8 text-muted">
+        <p className="measure text-muted mt-8">
           The guided flow, validation and submission handling are built in S5.
         </p>
       </Container>

@@ -19,10 +19,10 @@ export default function NotFound() {
     <SiteShell>
       <Container as="section" className="py-section">
         <Readout tone="accent">HTTP 404 · Route Not Found</Readout>
-        <h1 className="mt-4 text-h1 leading-display tracking-display">
+        <h1 className="text-h1 leading-display tracking-display mt-4">
           There is nothing at this address.
         </h1>
-        <p className="measure mt-6 text-lead text-muted">
+        <p className="measure text-lead text-muted mt-6">
           The link may be old, or the page may not exist yet. Everything that does exist is
           one of these:
         </p>
@@ -31,7 +31,7 @@ export default function NotFound() {
             <li key={link.href}>
               <Link
                 href={link.href}
-                className="rounded-xs text-accent-text underline-offset-4 hover:underline"
+                className="text-accent-text rounded-xs underline-offset-4 hover:underline"
               >
                 {link.label}
               </Link>

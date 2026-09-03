@@ -23,8 +23,8 @@ export function PageHeader({
   return (
     <Container as="section" className="py-section">
       {eyebrow ? <Readout className="text-muted">{eyebrow}</Readout> : null}
-      <h1 className="mt-4 text-h1 leading-display tracking-display">{title}</h1>
-      {intro ? <p className="measure mt-6 text-lead text-muted">{intro}</p> : null}
+      <h1 className="text-h1 leading-display tracking-display mt-4">{title}</h1>
+      {intro ? <p className="measure text-lead text-muted mt-6">{intro}</p> : null}
       {children}
     </Container>
   );

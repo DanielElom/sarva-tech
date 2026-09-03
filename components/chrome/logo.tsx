@@ -39,15 +39,15 @@ export function Logo({
   const mark = (
     <span
       className={cn(
-        'inline-flex items-baseline gap-[0.35em] font-display leading-none',
-        'tracking-display',
+        'site-logo font-display inline-flex items-baseline gap-[0.35em] leading-none',
+        'tracking-display transition-[font-size] duration-200',
         scale,
         className,
       )}
     >
       <span
         aria-hidden="true"
-        className="inline-block size-[0.42em] translate-y-[-0.04em] rounded-xs bg-accent"
+        className="bg-accent inline-block size-[0.42em] translate-y-[-0.04em] rounded-xs"
       />
       <span>
         <span className="font-semibold">Sarva</span>
@@ -62,7 +62,7 @@ export function Logo({
     // No aria-label: the visible wordmark IS the accessible name. An aria-label
     // that merely paraphrases visible text is a name/content mismatch, and it
     // is what a voice-control user would have to say to click this.
-    <Link href="/" className="inline-flex rounded-xs text-primary">
+    <Link href="/" className="text-primary inline-flex rounded-xs">
       {mark}
     </Link>
   );

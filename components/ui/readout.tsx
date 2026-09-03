@@ -19,6 +19,10 @@ export function Readout({
   tone?: 'muted' | 'primary' | 'accent';
 }) {
   const toneClass =
-    tone === 'accent' ? 'text-accent-text' : tone === 'primary' ? 'text-primary' : 'text-muted';
+    tone === 'accent'
+      ? 'text-accent-text'
+      : tone === 'primary'
+        ? 'text-primary'
+        : 'text-muted';
   return <span className={cn('readout', toneClass, className)}>{children}</span>;
 }

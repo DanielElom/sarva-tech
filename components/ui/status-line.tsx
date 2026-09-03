@@ -59,9 +59,16 @@ export function StatusLine({
 
   useEffect(() => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
-    (async () => {
+    /**
+     * The readout is real but it is not critical path, and on a mid-range
+     * Android the last thing worth doing during hydration is opening a network
+     * request for a status line below the fold. Wait for the main thread to go
+     * idle first (with a ceiling, so it always resolves).
+     */
+    const run = async () => {
+      timeout = setTimeout(() => controller.abort(), 6000);
       try {
         const response = await fetch(endpoint, {
           cache: 'no-store',
@@ -84,9 +91,19 @@ export function StatusLine({
       } finally {
         clearTimeout(timeout);
       }
-    })();
+    };
+
+    const hasIdle = typeof window.requestIdleCallback === 'function';
+    const handle = hasIdle
+      ? window.requestIdleCallback(() => void run(), { timeout: 1500 })
+      : window.setTimeout(() => void run(), 200);
 
     return () => {
+      if (hasIdle) {
+        window.cancelIdleCallback(handle);
+      } else {
+        window.clearTimeout(handle);
+      }
       clearTimeout(timeout);
       controller.abort();
     };
@@ -122,9 +139,15 @@ export function StatusLine({
         </span>
       </span>
       {showDetail && detail ? (
-        <Readout key={detail} className="state-in normal-case tracking-normal">
-          {detail}
-        </Readout>
+        <>
+          {/* The label and detail are separated visually by the flex gap, which
+              contributes nothing to the accessible name — without this the live
+              region announces "Partial Serviceweb: ok". */}
+          <span className="sr-only">: </span>
+          <Readout key={detail} className="state-in tracking-normal normal-case">
+            {detail}
+          </Readout>
+        </>
       ) : null}
     </p>
   );
