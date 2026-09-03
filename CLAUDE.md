@@ -96,6 +96,12 @@ sections."** Surfaces are defined by role and resolve per theme:
 survives a theme toggle. A section marked inverted flips against whatever theme is
 active, so the contrast rhythm holds in both.
 
+`[data-surface="inverted"]` declares its own `background-color` AND `color` in
+`@layer base`. Marking a section inverted is sufficient on its own. Never rely on a
+component remembering to also set a text colour — children inherit a computed colour,
+not the `var()` reference, so a section that sets only its background is legible in one
+theme and not the other.
+
 Theme follows the visitor's system preference on first load, with a manual toggle
 persisted to `localStorage`. No flash of wrong theme on load.
 
@@ -108,6 +114,13 @@ persisted to `localStorage`. No flash of wrong theme on load.
 | `accent` (fills) | `#F59B02` | `#F59B02` |
 | `accent-text` (text, icons, borders, focus) | `#F59B02` | `#986001` |
 | `on-accent` (text on an accent fill) | `#0A1410` | `#0A1410` |
+| `status-ok` / `status-warn` / `status-down` | per-theme, ≥4.5:1 on both surfaces | |
+| `line` | hairlines, reuses `surface-frame`, deliberately decorative, sub-3:1 | |
+| `line-strong` | reuses `text-muted`, 6.4:1, for boundaries meeting 1.4.11 | |
+
+Accent-filled controls carry an `accent-text` border in both themes. Do not make this
+conditional: `accent-text` resolves to `accent` in night, so the border is invisible
+there, and keeping it unconditional preserves identical box metrics across a toggle.
 
 **`accent` is a fill colour only.** `#F59B02` measures 1.96:1 against the day background.
 Using it for text, icons, thin borders, or focus rings in day mode is a contrast failure.
@@ -181,10 +194,13 @@ default that reads as generated. Rules:
 
 ### Animation budget
 
-- Hero visual: SVG or lightweight canvas, ≤40KB, paused when off-screen via
-  `IntersectionObserver`, replaced by a static composition below 768px.
-- Cursor effects and magnetic buttons are desktop-only, behind a pointer query. They buy
-  nothing on touch devices.
+- Hero visual: hand-rolled canvas or SVG driven by `requestAnimationFrame`. No
+  animation library. ≤40KB, loaded after first paint on idle, paused when off-screen
+  via `IntersectionObserver`, static composition below 768px.
+- `motion/react` is 40.8KB gzipped and does not fit the initial payload. If a section
+  needs declarative orchestration, use `LazyMotion` + `m`, dynamically imported on that
+  route only. Never in shared chrome — chrome transitions are CSS.
+- Cursor effects and magnetic buttons are desktop-only, behind a pointer query.
 - No animation may run continuously off-screen or when the tab is hidden.
 
 ---
@@ -198,7 +214,10 @@ Checked at the end of **every** session, not once at launch:
 
 - Lighthouse mobile performance ≥ 90
 - LCP < 2.5s, CLS < 0.1, INP < 200ms
-- No route ships more than 200KB of JavaScript, gzipped
+- Initial route payload: ≤200KB JS gzipped, measured from rendered HTML.
+  Baseline after S1: 182.8KB.
+- Deferred post-paint chunks: ≤50KB gzipped per route, loaded on idle or
+  intersection, never blocking LCP. Counted separately from the initial payload.
 - Images via `next/image`, explicit dimensions, modern formats
 - Below-fold heavy components dynamically imported
 
@@ -284,12 +303,14 @@ Footer copyright year is generated at build time, never typed.
 
 | Session | Scope | Status |
 |---|---|---|
-| S1 | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | not started |
+| S1 | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | complete |
 | S2 | Homepage part 1: hero + interactive visual, what we do, problem-first section | not started |
-| S3 | Homepage part 2: services ecosystem, process timeline, technology ecosystem, why Sarva Tech, conversion footer | not started |
+| S3 | Homepage part 2: services ecosystem, process timeline, technology ecosystem, why Sarva Tech | not started |
 | S4 | Content layer: MDX schemas, solutions and work listing + detail, four real case studies | not started |
 | S5 | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page | not started |
 | S6 | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch | not started |
+
+S1 is complete. The conversion footer was built in S1; S3 no longer includes it.
 
 A copy pass happens between S1 and S2. Layout follows copy, and inventing placeholder copy
 in S2 means rebuilding sections later when the real words are a different length.
@@ -316,3 +337,24 @@ assumptions, and confirmation of readiness for the next session without starting
 - [ ] `grep` for hardcoded colours returns nothing
 - [ ] 404 and error pages designed, not framework defaults
 - [ ] OG images render correctly when a link is shared to WhatsApp
+- [ ] `NEXT_PUBLIC_SITE_URL` set explicitly in Vercel once the real domain is live.
+      Until then production resolves to the `vercel.app` host, and canonical URLs,
+      sitemap and OG images will all point at the wrong origin. OG images fail
+      silently — the link looks fine until it is shared.
+
+---
+
+## 14. Verification rules
+
+- A new check must be run against the known-broken code before it is trusted. A check
+  that passes on the bug it was written for is decorative. The site-URL bug proved this:
+  "build with no `.env.local`" passed on the broken code, because absent is `undefined`
+  and the actual failure shape was set-but-empty.
+- Environment checks must distinguish absent, empty, and whitespace-only. Next inlines
+  `NEXT_PUBLIC_*` at build time, so an unset variable arrives as `''`, not `undefined`.
+- An assertion must pin down identity and count. `querySelector` matches the first
+  instance and can pass on the wrong element while the element under test is broken. Use
+  `querySelectorAll` and assert the expected count.
+- Comparative performance measurements are interleaved, never consecutive blocks per
+  subject. Report the median paired difference, not the difference of medians.
+- `.env.example` documents every variable the app reads and its fallback behaviour.
