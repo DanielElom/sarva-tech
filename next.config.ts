@@ -1,5 +1,19 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import { resolveSiteUrl } from './lib/site';
+
+/**
+ * Resolved once, here, so the value is identical everywhere.
+ *
+ * Only NEXT_PUBLIC_* variables reach the browser, and the Vercel-provided host
+ * names are server-only. Pinning the resolved origin into NEXT_PUBLIC_SITE_URL
+ * at build time means a preview or production deploy gets the right canonical
+ * URL on both sides with nothing set by hand in the Vercel dashboard. If the
+ * variable is already set explicitly, the resolver returns it unchanged.
+ *
+ * A malformed value throws SiteUrlError here — before any page is built.
+ */
+const siteUrl = resolveSiteUrl();
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -20,6 +34,7 @@ const nextConfig: NextConfig = {
   env: {
     // Stamped at build time so /api/health can report honestly when it was built.
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+    NEXT_PUBLIC_SITE_URL: siteUrl,
   },
 };
 
