@@ -187,6 +187,56 @@
     font-size: var(--text-body);
   }
 
+  /*
+   * Hero panel. The static SVG is what the server delivers and what LCP
+   * measures; once the canvas layer mounts, the panel gains `data-animated`
+   * and the static composition fades out from underneath it. Both are
+   * absolutely positioned inside a box whose aspect ratio is already reserved,
+   * so the handover cannot move anything on the page.
+   */
+  .hero-panel .hero-static {
+    transition: opacity 400ms ease-out;
+  }
+
+  .hero-panel[data-animated] .hero-static {
+    opacity: 0;
+  }
+
+  /* Corner ticks — instrument framing for the panel. */
+  .hero-ticks::before,
+  .hero-ticks::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: var(--color-line-strong);
+    opacity: 0.5;
+  }
+
+  .hero-ticks::before {
+    top: 10px;
+    left: 10px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+  }
+
+  .hero-ticks::after {
+    right: 10px;
+    bottom: 10px;
+    border-right: 1px solid;
+    border-bottom: 1px solid;
+  }
+
+  /*
+   * A stage panel animates in when `hidden` is removed, because an element
+   * moving out of display:none restarts its animation. CSS rather than a
+   * library, and the reduced-motion rule below collapses it to an instant
+   * change without this component knowing anything about it.
+   */
+  .stage-panel:not([hidden]) {
+    animation: state-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
   /* The single elevation treatment. One, not a ladder. */
   .elevated {
     background-color: var(--color-surface-raised);

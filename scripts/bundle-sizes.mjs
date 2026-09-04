@@ -9,8 +9,10 @@
  * Usage: node scripts/bundle-sizes.mjs http://localhost:3000
  */
 import { gzipSync } from 'node:zlib';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 const origin = process.argv[2] ?? 'http://localhost:3000';
 const LIMIT_KB = 200;
@@ -64,6 +66,116 @@ for (const row of rows) {
   );
 }
 console.log(
-  `\n  Largest route: ${Math.max(...rows.map((r) => r.kb)).toFixed(1)} KB gzipped. ${failures === 0 ? 'All routes under the cap.' : `${failures} over.`}\n`,
+  `\n  Largest initial payload: ${Math.max(...rows.map((r) => r.kb)).toFixed(1)} KB gzipped. ${failures === 0 ? 'All routes under the cap.' : `${failures} over.`}`,
 );
-process.exit(failures === 0 ? 0 : 1);
+
+/*
+ * Deferred chunks (CLAUDE.md 6, ≤50KB per route). These are not in the served
+ * HTML — they are fetched after paint — so they cannot be measured by reading
+ * the markup. Drive a real browser and diff what it actually requested against
+ * what the HTML referenced.
+ */
+const DEFERRED_LIMIT_KB = 50;
+const chromePath =
+  process.env.CHROME_PATH ??
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+const profile = mkdtempSync(join(tmpdir(), 'sarva-deferred-'));
+const chrome = spawn(chromePath, [
+  '--headless=new',
+  '--remote-debugging-port=9377',
+  `--user-data-dir=${profile}`,
+  '--no-first-run',
+]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let deferredFailures = 0;
+try {
+  let target = null;
+  for (let i = 0; i < 40 && !target; i++) {
+    await sleep(300);
+    try {
+      const list = await (await fetch('http://127.0.0.1:9377/json/list')).json();
+      target = list.find((t) => t.type === 'page');
+    } catch {
+      /* not up yet */
+    }
+  }
+  if (!target) throw new Error('Chrome did not expose a debugging target.');
+
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.addEventListener('open', resolve, { once: true });
+    ws.addEventListener('error', reject, { once: true });
+  });
+  let id = 0;
+  const pending = new Map();
+  const fetched = [];
+  ws.addEventListener('message', (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.id && pending.has(msg.id)) {
+      pending.get(msg.id)(msg.result);
+      pending.delete(msg.id);
+    } else if (msg.method === 'Network.responseReceived') {
+      const { response, type } = msg.params;
+      if (type === 'Script') fetched.push(response.url);
+    }
+  });
+  const send = (method, params = {}) => {
+    const i = ++id;
+    ws.send(JSON.stringify({ id: i, method, params }));
+    return new Promise((r) => pending.set(i, r));
+  };
+
+  await send('Page.enable');
+  await send('Runtime.enable');
+  await send('Network.enable');
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+
+  console.log('\n  Deferred chunks fetched after paint (desktop, motion allowed)');
+  console.log('  ' + '-'.repeat(62));
+
+  for (const route of ['/']) {
+    fetched.length = 0;
+    await send('Page.navigate', { url: origin + route });
+    // Wait until the hero visual has actually mounted, then a moment more.
+    for (let i = 0; i < 60; i++) {
+      await sleep(200);
+      const r = await send('Runtime.evaluate', {
+        expression: `!!document.querySelector('[data-hero-canvas]')`,
+        returnByValue: true,
+      });
+      if (r?.result?.value) break;
+    }
+    await sleep(600);
+
+    const html = await (await fetch(origin + route)).text();
+    const inHtml = new Set(
+      [...html.matchAll(/\/_next\/static\/[^"'\s)]+?\.js/g)].map((m) => m[0]),
+    );
+    const deferred = [...new Set(fetched)]
+      .map((url) => new URL(url).pathname)
+      .filter((path) => path.startsWith('/_next/static/') && !inHtml.has(path));
+
+    const total = deferred.reduce((sum, path) => sum + gzippedSize(path), 0) / 1024;
+    if (total > DEFERRED_LIMIT_KB) deferredFailures++;
+    console.log(
+      `  ${route.padEnd(20)}  ${deferred.length} chunk(s)  ${(total.toFixed(1) + ' KB').padStart(10)}   ${total <= DEFERRED_LIMIT_KB ? 'pass' : 'FAIL'}  (limit ${DEFERRED_LIMIT_KB}KB)`,
+    );
+    for (const path of deferred) {
+      console.log(`      ${(gzippedSize(path) / 1024).toFixed(1).padStart(6)} KB  ${path}`);
+    }
+  }
+
+  ws.close();
+} finally {
+  chrome.kill();
+}
+
+console.log('');
+process.exit(failures === 0 && deferredFailures === 0 ? 0 : 1);

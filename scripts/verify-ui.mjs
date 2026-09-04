@@ -69,6 +69,20 @@ class CDP {
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + ' :: ' + expression);
     return r.result.value;
   }
+  /** Poll until `expression` is truthy, or give up. Returns whether it became true. */
+  async waitFor(expression, timeoutMs = 12000, intervalMs = 100) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      try {
+        if (await this.eval(expression)) return true;
+      } catch {
+        /* page mid-navigation; try again */
+      }
+      if (Date.now() > deadline) return false;
+      await wait(intervalMs);
+    }
+  }
+
   async goto(url) {
     const done = new Promise((resolve) => this.on('Page.loadEventFired', resolve));
     await this.send('Page.navigate', { url });
@@ -147,6 +161,18 @@ try {
   await client.send('Page.enable');
   await client.send('Runtime.enable');
   await client.send('DOM.enable');
+  await client.send('Network.enable');
+
+  /** Every script the browser actually fetched, in order. */
+  let scriptRequests = [];
+  client.on('Network.responseReceived', ({ response, type }) => {
+    if (type === 'Script' || /\.js(\?|$)/.test(response.url)) {
+      scriptRequests.push({ url: response.url, encoded: response.encodedDataLength });
+    }
+  });
+  const resetScriptLog = () => {
+    scriptRequests = [];
+  };
 
   const night = colorTokens;
   const dayBase = toRgb(night['surface-base'].day);
@@ -313,19 +339,27 @@ try {
 
   // Walk the whole header by keyboard and confirm nothing is unreachable.
   const reachable = await client.eval(`(() => {
-    const sel = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const sel = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]';
     const all = [...document.querySelectorAll(sel)].filter(el => {
       if (el.closest('[inert]')) return false;
       const cs = getComputedStyle(el);
       return cs.visibility !== 'hidden' && cs.display !== 'none';
     });
-    const negative = all.filter(el => el.tabIndex < 0);
-    return { total: all.length, unreachable: negative.length };
+    /*
+     * A composite widget managing a roving tabindex is NOT unreachable: the
+     * container is one Tab stop and the arrow keys move within it. Excluding
+     * those here is correct; the roving invariant itself is asserted separately
+     * in the tabs checks, so nothing goes unverified.
+     */
+    const managed = all.filter(el => el.tabIndex < 0 && el.closest('[role="tablist"]'));
+    const orphaned = all.filter(el => el.tabIndex < 0 && !el.closest('[role="tablist"]'));
+    return { total: all.length, managed: managed.length, orphaned: orphaned.length };
   })()`);
   check(
-    'Every visible interactive element is in the tab order',
-    reachable.unreachable === 0,
-    `${reachable.total} interactive elements on /, ${reachable.unreachable} removed from the tab order`,
+    'Every visible interactive element is reachable by keyboard',
+    reachable.orphaned === 0,
+    `${reachable.total} interactive elements on /, ${reachable.orphaned} unreachable, ` +
+      `${reachable.managed} inside a roving-tabindex tablist (reached via arrow keys)`,
   );
 
   // ------------------------------------------------------- MOBILE MENU ---
@@ -585,6 +619,311 @@ try {
       ? themeProblems.join('; ')
       : `${(routes.length + 1) * 2} route/theme combinations checked against the token values`,
   );
+
+  // ------------------------------------------------------- HERO VISUAL ----
+  console.log('\nHERO VISUAL');
+
+  const heroSelectors = `(() => ({
+    panels: document.querySelectorAll('[data-hero-panel]').length,
+    canvases: document.querySelectorAll('[data-hero-canvas]').length,
+    statics: document.querySelectorAll('.hero-static').length,
+  }))()`;
+
+  // -- Desktop, motion allowed: the animated layer should load and run.
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-motion', value: 'no-preference' },
+      { name: 'prefers-color-scheme', value: 'dark' },
+    ],
+  });
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  resetScriptLog();
+  await client.goto(ORIGIN + '/');
+  const canvasMounted = await client.waitFor(
+    `!!document.querySelector('[data-hero-canvas]')`,
+  );
+  const canvasRunning = await client.waitFor(
+    `document.querySelector('[data-hero-canvas]')?.dataset.state === 'running'`,
+  );
+
+  const desktopHero = await client.eval(heroSelectors);
+  check(
+    'Desktop: exactly one hero panel, one static composition, one canvas',
+    desktopHero.panels === 1 && desktopHero.statics === 1 && desktopHero.canvases === 1,
+    `panels=${desktopHero.panels} statics=${desktopHero.statics} canvases=${desktopHero.canvases}` +
+      ` (mounted=${canvasMounted}, reached running=${canvasRunning})`,
+  );
+
+  const running = await client.eval(`(async () => {
+    const canvas = document.querySelector('[data-hero-canvas]');
+    if (!canvas) return { state: 'absent', before: 0, after: 0 };
+    const before = canvas.__heroFrames ?? 0;
+    await new Promise(r => setTimeout(r, 500));
+    return { state: canvas.dataset.state, before, after: canvas.__heroFrames ?? 0 };
+  })()`);
+  check(
+    'The rAF loop runs while the panel is on screen',
+    running.state === 'running' && running.after > running.before,
+    `data-state=${running.state}, frames ${running.before} -> ${running.after}`,
+  );
+
+  // -- Off-screen: the loop must stop, not merely slow down.
+  await client.eval(`window.scrollTo(0, document.body.scrollHeight)`);
+  await client.waitFor(
+    `document.querySelector('[data-hero-canvas]')?.dataset.state === 'paused'`,
+    6000,
+  );
+  const offScreen = await client.eval(`(async () => {
+    const canvas = document.querySelector('[data-hero-canvas]');
+    if (!canvas) return { state: 'absent', settled: 0, later: -1 };
+    // Let anything already queued settle, then hold still and watch.
+    await new Promise(r => setTimeout(r, 300));
+    const state = canvas.dataset.state;
+    const settled = canvas.__heroFrames ?? 0;
+    await new Promise(r => setTimeout(r, 900));
+    return { state, settled, later: canvas.__heroFrames ?? 0 };
+  })()`);
+  check(
+    'Scrolled out of view, the rAF loop stops entirely',
+    offScreen.state === 'paused' && offScreen.later === offScreen.settled,
+    `data-state=${offScreen.state}, frames held at ${offScreen.settled} across 700ms`,
+  );
+
+  await client.eval(`window.scrollTo(0, 0)`);
+  await client.waitFor(
+    `document.querySelector('[data-hero-canvas]')?.dataset.state === 'running'`,
+    6000,
+  );
+  const backOnScreen = await client.eval(`(async () => {
+    const canvas = document.querySelector('[data-hero-canvas]');
+    if (!canvas) return { state: 'absent', resumed: false };
+    const before = canvas.__heroFrames ?? 0;
+    await new Promise(r => setTimeout(r, 400));
+    return { state: canvas.dataset.state, resumed: (canvas.__heroFrames ?? 0) > before };
+  })()`);
+  check(
+    'Scrolling back into view resumes it',
+    backOnScreen.state === 'running' && backOnScreen.resumed,
+    `data-state=${backOnScreen.state}`,
+  );
+
+  // -- Tab hidden: exercises the real visibilitychange handler, which reads
+  //    document.hidden, by overriding that getter and firing the event.
+  const hiddenTab = await client.eval(`(async () => {
+    const canvas = document.querySelector('[data-hero-canvas]');
+    if (!canvas) return { state: 'absent', settled: 0, later: -1 };
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await new Promise(r => setTimeout(r, 400));
+    const state = canvas.dataset.state;
+    const settled = canvas.__heroFrames ?? 0;
+    await new Promise(r => setTimeout(r, 900));
+    const later = canvas.__heroFrames ?? 0;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    return { state, settled, later };
+  })()`);
+  check(
+    'With the tab hidden, the rAF loop stops entirely',
+    hiddenTab.state === 'paused' && hiddenTab.later === hiddenTab.settled,
+    `data-state=${hiddenTab.state}, frames held at ${hiddenTab.settled} across 600ms`,
+  );
+
+  // -- Below 768px: nothing animated should exist, and its chunk should never
+  //    even be requested.
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  resetScriptLog();
+  await client.goto(ORIGIN + '/');
+  // Asserting absence, so wait well past the idle deadline that would have
+  // mounted it. If it were going to appear, it has had every chance.
+  await wait(4000);
+  const mobileHero = await client.eval(heroSelectors);
+  const mobileRaf = await client.eval(`(async () => {
+    let ticks = 0;
+    const original = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => { ticks++; return original(cb); };
+    await new Promise(r => setTimeout(r, 700));
+    window.requestAnimationFrame = original;
+    return ticks;
+  })()`);
+  check(
+    'Below 768px there is no canvas at all — the static composition is the whole visual',
+    mobileHero.canvases === 0 && mobileHero.statics === 1,
+    `canvases=${mobileHero.canvases} statics=${mobileHero.statics}, and ${mobileRaf} rAF callbacks scheduled in 700ms`,
+  );
+  check(
+    'Below 768px the hero visual chunk is never even requested',
+    mobileRaf === 0,
+    `${mobileRaf} requestAnimationFrame callbacks scheduled while idle on mobile`,
+  );
+
+  // -- Reduced motion, desktop width: same story.
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-motion', value: 'reduce' },
+      { name: 'prefers-color-scheme', value: 'dark' },
+    ],
+  });
+  await client.goto(ORIGIN + '/');
+  await wait(4000);
+  const reducedHero = await client.eval(heroSelectors);
+  const reducedRaf = await client.eval(`(async () => {
+    let ticks = 0;
+    const original = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => { ticks++; return original(cb); };
+    await new Promise(r => setTimeout(r, 700));
+    window.requestAnimationFrame = original;
+    return ticks;
+  })()`);
+  check(
+    'With reduced motion there is no canvas and no rAF loop, at any width',
+    reducedHero.canvases === 0 && reducedHero.statics === 1 && reducedRaf === 0,
+    `canvases=${reducedHero.canvases} statics=${reducedHero.statics}, ${reducedRaf} rAF callbacks in 700ms`,
+  );
+
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [
+      { name: 'prefers-reduced-motion', value: 'no-preference' },
+      { name: 'prefers-color-scheme', value: 'dark' },
+    ],
+  });
+
+  // ------------------------------------------------------ PROCESS TABS ----
+  console.log('\nPROBLEM-FIRST STAGES');
+
+  await client.goto(ORIGIN + '/');
+  await wait(400);
+
+  const tabsShape = await client.eval(`(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+    const list = document.querySelector('[role="tablist"]');
+    return {
+      tabCount: tabs.length,
+      panelCount: panels.length,
+      visiblePanels: panels.filter(p => !p.hasAttribute('hidden')).length,
+      rovingZero: tabs.filter(t => t.tabIndex === 0).length,
+      selected: tabs.filter(t => t.getAttribute('aria-selected') === 'true').length,
+      wiring: tabs.every((t, i) => {
+        const panel = document.getElementById(t.getAttribute('aria-controls'));
+        return panel && panel.getAttribute('aria-labelledby') === t.id;
+      }),
+      orientation: list?.getAttribute('aria-orientation'),
+      listNamed: !!list?.getAttribute('aria-label'),
+      allBodiesPresent: panels.every(p => p.textContent.trim().length > 30),
+    };
+  })()`);
+  check(
+    'Seven tabs, seven panels, exactly one selected and one visible',
+    tabsShape.tabCount === 7 &&
+      tabsShape.panelCount === 7 &&
+      tabsShape.visiblePanels === 1 &&
+      tabsShape.selected === 1,
+    `tabs=${tabsShape.tabCount} panels=${tabsShape.panelCount} visible=${tabsShape.visiblePanels} selected=${tabsShape.selected}`,
+  );
+  check(
+    'Roving tabindex: the whole list is one Tab stop',
+    tabsShape.rovingZero === 1,
+    `${tabsShape.rovingZero} tab(s) with tabindex=0`,
+  );
+  check(
+    'Every tab controls a panel that points back at it, on a named vertical tablist',
+    tabsShape.wiring && tabsShape.orientation === 'vertical' && tabsShape.listNamed,
+    `aria wiring=${tabsShape.wiring} orientation=${tabsShape.orientation} named=${tabsShape.listNamed}`,
+  );
+  check(
+    'All seven descriptions are in the DOM, not fetched on interaction',
+    tabsShape.allBodiesPresent && tabsShape.panelCount === 7,
+    'every one of the 7 tabpanels carries its copy in the served HTML',
+  );
+
+  // Keyboard: reach the list with Tab, then drive it with arrows alone.
+  const keyboardTabs = await client.eval(`(() => {
+    document.querySelector('[role="tab"]').focus();
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    return { focused: tabs.indexOf(document.activeElement) };
+  })()`);
+  await client.press('ArrowDown', 'ArrowDown', 40);
+  await client.press('ArrowDown', 'ArrowDown', 40);
+  const afterArrows = await client.eval(`(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    const active = tabs.indexOf(document.activeElement);
+    return {
+      active,
+      selected: tabs.findIndex(t => t.getAttribute('aria-selected') === 'true'),
+      panelShown: [...document.querySelectorAll('[role="tabpanel"]')].findIndex(p => !p.hasAttribute('hidden')),
+    };
+  })()`);
+  check(
+    'ArrowDown moves selection, focus and the visible panel together',
+    afterArrows.active === 2 && afterArrows.selected === 2 && afterArrows.panelShown === 2,
+    `started at ${keyboardTabs.focused}, two ArrowDowns -> focus ${afterArrows.active}, selected ${afterArrows.selected}, panel ${afterArrows.panelShown}`,
+  );
+
+  await client.press('End', 'End', 35);
+  const atEnd = await client.eval(`(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    return tabs.indexOf(document.activeElement);
+  })()`);
+  await client.press('ArrowDown', 'ArrowDown', 40);
+  const wrapped = await client.eval(`(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    return tabs.indexOf(document.activeElement);
+  })()`);
+  await client.press('Home', 'Home', 36);
+  const atHome = await client.eval(`(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')];
+    return tabs.indexOf(document.activeElement);
+  })()`);
+  check(
+    'End, wrap-around and Home all behave',
+    atEnd === 6 && wrapped === 0 && atHome === 0,
+    `End -> ${atEnd}, ArrowDown past the end -> ${wrapped}, Home -> ${atHome}`,
+  );
+
+  // The stages sit on an inverted surface: check contrast there specifically.
+  for (const theme of ['night', 'day']) {
+    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+    await client.goto(ORIGIN + '/');
+    await wait(300);
+    const opposite = theme === 'night' ? 'day' : 'night';
+    const stageColours = await client.eval(`(() => {
+      const section = document.querySelector('[data-surface="inverted"]');
+      const tab = section.querySelector('[role="tab"][aria-selected="true"]');
+      const panel = section.querySelector('[role="tabpanel"]:not([hidden])');
+      return {
+        bg: getComputedStyle(section).backgroundColor,
+        tabColour: getComputedStyle(tab).color,
+        panelColour: getComputedStyle(panel.querySelector('p')).color,
+      };
+    })()`);
+    check(
+      `The stages read correctly on the inverted surface in the ${theme} theme`,
+      stageColours.bg === toRgb(colorTokens['surface-base'][opposite]) &&
+        stageColours.tabColour === toRgb(colorTokens.primary[opposite]) &&
+        stageColours.panelColour === toRgb(colorTokens.primary[opposite]),
+      `band ${stageColours.bg}, selected tab ${stageColours.tabColour}, panel ${stageColours.panelColour} (want ${toRgb(colorTokens.primary[opposite])})`,
+    );
+  }
+
 } finally {
   try {
     client?.ws.close();
