@@ -114,9 +114,12 @@ persisted to `localStorage`. No flash of wrong theme on load.
 | `accent` (fills) | `#F59B02` | `#F59B02` |
 | `accent-text` (text, icons, borders, focus) | `#F59B02` | `#986001` |
 | `on-accent` (text on an accent fill) | `#0A1410` | `#0A1410` |
-| `status-ok` / `status-warn` / `status-down` | per-theme, ≥4.5:1 on both surfaces | |
-| `line` | hairlines, reuses `surface-frame`, deliberately decorative, sub-3:1 | |
-| `line-strong` | reuses `text-muted`, 6.4:1, for boundaries meeting 1.4.11 | |
+
+These three have no per-theme hex of their own, so they sit outside the table:
+
+- `status-ok` / `status-warn` / `status-down` — per-theme, ≥4.5:1 on both surfaces.
+- `line` — hairlines, reuses `surface-frame`, deliberately decorative, sub-3:1.
+- `line-strong` — reuses `text-muted`, 6.4:1, for boundaries meeting 1.4.11.
 
 Accent-filled controls carry an `accent-text` border in both themes. Do not make this
 conditional: `accent-text` resolves to `accent` in night, so the border is invisible
