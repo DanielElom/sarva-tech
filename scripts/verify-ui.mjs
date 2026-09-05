@@ -957,22 +957,43 @@ try {
     await client.goto(ORIGIN + '/');
     await wait(300);
     const opposite = theme === 'night' ? 'day' : 'night';
+    /*
+     * Located by the widget it contains, not by "the first inverted thing on
+     * the page" (CLAUDE.md 14). Querying for [data-surface="inverted"] matched
+     * the FOOTER when the stages section lost its marker, so the check passed
+     * on the wrong element while the section under test was broken. It now
+     * asserts that the section holding the tablist is itself inverted, and how
+     * many inverted scopes the page has.
+     *
+     * Every read is defensive: a missing node must report FAIL, not throw and
+     * take the suite down before anything is reported.
+     */
     const stageColours = await client.eval(`(() => {
-      const section = document.querySelector('[data-surface="inverted"]');
-      const tab = section.querySelector('[role="tab"][aria-selected="true"]');
-      const panel = section.querySelector('[role="tabpanel"]:not([hidden])');
+      const list = document.querySelector('[role="tablist"]');
+      const section = list ? list.closest('section') : null;
+      const tab = section ? section.querySelector('[role="tab"][aria-selected="true"]') : null;
+      const panel = section ? section.querySelector('[role="tabpanel"]:not([hidden]) p') : null;
       return {
-        bg: getComputedStyle(section).backgroundColor,
-        tabColour: getComputedStyle(tab).color,
-        panelColour: getComputedStyle(panel.querySelector('p')).color,
+        found: !!section,
+        isInverted: section ? section.getAttribute('data-surface') === 'inverted' : false,
+        invertedCount: document.querySelectorAll('[data-surface="inverted"]').length,
+        bg: section ? getComputedStyle(section).backgroundColor : null,
+        tabColour: tab ? getComputedStyle(tab).color : null,
+        panelColour: panel ? getComputedStyle(panel).color : null,
       };
     })()`);
     check(
-      `The stages read correctly on the inverted surface in the ${theme} theme`,
-      stageColours.bg === toRgb(colorTokens['surface-base'][opposite]) &&
+      `The stages section is itself inverted and reads correctly in the ${theme} theme`,
+      stageColours.found &&
+        stageColours.isInverted &&
+        stageColours.invertedCount === 2 &&
+        stageColours.bg === toRgb(colorTokens['surface-base'][opposite]) &&
         stageColours.tabColour === toRgb(colorTokens.primary[opposite]) &&
         stageColours.panelColour === toRgb(colorTokens.primary[opposite]),
-      `band ${stageColours.bg}, selected tab ${stageColours.tabColour}, panel ${stageColours.panelColour} (want ${toRgb(colorTokens.primary[opposite])})`,
+      `section found=${stageColours.found} inverted=${stageColours.isInverted}, ` +
+        `${stageColours.invertedCount} inverted scope(s) on the page (want 2); ` +
+        `band ${stageColours.bg}, selected tab ${stageColours.tabColour}, panel ${stageColours.panelColour} ` +
+        `(want ${toRgb(colorTokens.primary[opposite])})`,
     );
   }
 

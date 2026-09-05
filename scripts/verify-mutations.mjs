@@ -111,7 +111,7 @@ const MUTATIONS = [
     find: '    <section data-surface="inverted" aria-labelledby={`${baseId}-heading`}>',
     replace: '    <section aria-labelledby={`${baseId}-heading`}>',
     artefact: null, // an absence, not a string; caught by byte-comparison
-    expect: 'every inverted surface resolves to the',
+    expect: 'The stages section is itself inverted',
   },
 ];
 
