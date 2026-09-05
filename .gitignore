@@ -11,3 +11,4 @@ next-env.d.ts
 *.tsbuildinfo
 .eslintcache
 lighthouse-*.json
+.mutation-snapshot/

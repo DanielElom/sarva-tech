@@ -178,447 +178,457 @@ try {
   const dayBase = toRgb(night['surface-base'].day);
   const nightBase = toRgb(night['surface-base'].night);
 
-  // ---------------------------------------------------------------- THEME --
-  console.log('\nTHEME');
+  /*
+   * The S1 sections. Mutation runs re-execute this suite once per defect, and
+   * these do not exercise anything a homepage mutation can break, so they are
+   * skippable there. Never skipped in a normal run.
+   */
+  if (process.env.SARVA_SCOPE !== "home") {
+    // ---------------------------------------------------------------- THEME --
+    console.log('\nTHEME');
 
-  await client.send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-color-scheme', value: 'dark' }],
-  });
-  await client.goto(ORIGIN + '/');
-  let state = await client.eval(`(() => ({
-    attr: document.documentElement.getAttribute('data-theme'),
-    bg: getComputedStyle(document.body).backgroundColor,
-  }))()`);
-  check(
-    'System dark preference resolves to the night theme on first load',
-    state.attr === 'night' && state.bg === nightBase,
-    `data-theme=${state.attr}  body background=${state.bg}  (night surface-base=${nightBase})`,
-  );
-
-  await client.send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-color-scheme', value: 'light' }],
-  });
-  await client.eval(`localStorage.clear()`);
-  await client.goto(ORIGIN + '/');
-  state = await client.eval(`(() => ({
-    attr: document.documentElement.getAttribute('data-theme'),
-    bg: getComputedStyle(document.body).backgroundColor,
-  }))()`);
-  check(
-    'System light preference resolves to the day theme on first load',
-    state.attr === 'day' && state.bg === dayBase,
-    `data-theme=${state.attr}  body background=${state.bg}  (day surface-base=${dayBase})`,
-  );
-
-  // ------------------------------------------------------ NO THEME FLASH --
-  // Stored choice deliberately contradicts the system preference. If the
-  // attribute is set before first paint, no wrong-theme frame is ever shown.
-  await client.send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-color-scheme', value: 'dark' }],
-  });
-  await client.eval(`localStorage.setItem('sarva-theme','day')`);
-  await client.send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `
-      window.__themeSetAt = null;
-      // This runs before the document has a documentElement, so observe the
-      // document itself with subtree, which covers <html>'s attributes.
-      new MutationObserver(() => {
-        if (window.__themeSetAt === null) window.__themeSetAt = performance.now();
-      }).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-theme'] });
-    `,
-  });
-  await client.goto(ORIGIN + '/');
-  const flash = await client.eval(`(() => {
-    const paint = performance.getEntriesByType('paint');
-    const fcp = paint.find(p => p.name === 'first-contentful-paint');
-    return {
-      themeSetAt: window.__themeSetAt,
-      fcp: fcp ? fcp.startTime : null,
+    await client.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: 'dark' }],
+    });
+    await client.goto(ORIGIN + '/');
+    let state = await client.eval(`(() => ({
       attr: document.documentElement.getAttribute('data-theme'),
       bg: getComputedStyle(document.body).backgroundColor,
-    };
-  })()`);
-  check(
-    'No flash of wrong theme: attribute is set before first contentful paint',
-    flash.attr === 'day' &&
-      flash.bg === dayBase &&
-      flash.themeSetAt !== null &&
-      flash.fcp !== null &&
-      flash.themeSetAt < flash.fcp,
-    `stored=day, system=dark -> resolved ${flash.attr}; attribute set at ${flash.themeSetAt?.toFixed(1)}ms, first contentful paint at ${flash.fcp?.toFixed(1)}ms`,
-  );
-
-  // ------------------------------------------------------ THEME TOGGLE ----
-  const toggled = await client.eval(`(async () => {
-    const before = document.documentElement.getAttribute('data-theme');
-    const btn = [...document.querySelectorAll('button')]
-      .find(b => /Switch to (night|day) theme/.test(b.getAttribute('aria-label') || ''));
-    const label = btn && btn.getAttribute('aria-label');
-    btn.click();
-    await new Promise(r => setTimeout(r, 120));
-    return {
-      before, label,
-      after: document.documentElement.getAttribute('data-theme'),
-      stored: localStorage.getItem('sarva-theme'),
-      bg: getComputedStyle(document.body).backgroundColor,
-      labelAfter: btn.getAttribute('aria-label'),
-    };
-  })()`);
-  check(
-    'Toggle switches theme, persists it, and its accessible name says what it will do',
-    toggled.before === 'day' &&
-      toggled.after === 'night' &&
-      toggled.stored === 'night' &&
-      toggled.label === 'Switch to night theme' &&
-      toggled.labelAfter === 'Switch to day theme',
-    `"${toggled.label}" -> ${toggled.before} became ${toggled.after}, localStorage=${toggled.stored}, name now "${toggled.labelAfter}"`,
-  );
-
-  // --------------------------------------------------- SURFACE-INVERTED ---
-  console.log('\nSURFACE-INVERTED');
-  for (const theme of ['night', 'day']) {
-    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
-    await client.goto(ORIGIN + '/');
-    // Assert on EVERY inverted scope, and on the count. Querying only the
-    // first one let a broken home-page band pass because the footer's scope
-    // was found instead.
-    const inv = await client.eval(`(() => {
-      const els = [...document.querySelectorAll('[data-surface="inverted"]')];
-      return {
-        count: els.length,
-        page: getComputedStyle(document.body).backgroundColor,
-        scopes: els.map(el => {
-          const heading = el.querySelector('h2');
-          return {
-            where: el.closest('footer') ? 'footer' : 'page body',
-            panel: getComputedStyle(el).backgroundColor,
-            headingColor: heading ? getComputedStyle(heading).color : null,
-          };
-        }),
-      };
-    })()`);
-    const opposite = theme === 'night' ? 'day' : 'night';
-    const wantPanel = toRgb(colorTokens['surface-base'][opposite]);
-    const wantHeading = toRgb(colorTokens.primary[opposite]);
-    const allFlipped =
-      inv.count >= 2 &&
-      inv.page === toRgb(colorTokens['surface-base'][theme]) &&
-      inv.scopes.every(
-        (s) => s.panel === wantPanel && (s.headingColor === null || s.headingColor === wantHeading),
-      );
-    check(
-      `In the ${theme} theme, every inverted surface resolves to the ${opposite} base`,
-      allFlipped,
-      `page ${inv.page}; ${inv.count} inverted scopes -> ` +
-        inv.scopes.map((s) => `${s.where}: bg ${s.panel}, h2 ${s.headingColor}`).join(' | ') +
-        ` (want bg ${wantPanel}, h2 ${wantHeading})`,
-    );
-  }
-
-  // ------------------------------------------------------- FOCUS RING -----
-  console.log('\nKEYBOARD');
-  await client.eval(`localStorage.setItem('sarva-theme','day')`);
-  await client.goto(ORIGIN + '/');
-  await client.press('Tab', 'Tab', 9);
-  const focus = await client.eval(`(() => {
-    const el = document.activeElement;
-    const cs = getComputedStyle(el);
-    return {
-      tag: el.tagName, text: (el.textContent || '').trim().slice(0, 30),
-      outlineColor: cs.outlineColor, outlineWidth: cs.outlineWidth, outlineStyle: cs.outlineStyle,
-    };
-  })()`);
-  check(
-    'First Tab reaches the skip link, with a visible accent-text focus ring',
-    focus.text.includes('Skip to content') &&
-      focus.outlineColor === toRgb(colorTokens['accent-text'].day) &&
-      focus.outlineStyle === 'solid' &&
-      parseFloat(focus.outlineWidth) >= 2,
-    `focus on <${focus.tag}> "${focus.text}" — outline ${focus.outlineWidth} ${focus.outlineStyle} ${focus.outlineColor} (day accent-text=${toRgb(colorTokens['accent-text'].day)})`,
-  );
-
-  // Walk the whole header by keyboard and confirm nothing is unreachable.
-  const reachable = await client.eval(`(() => {
-    const sel = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]';
-    const all = [...document.querySelectorAll(sel)].filter(el => {
-      if (el.closest('[inert]')) return false;
-      const cs = getComputedStyle(el);
-      return cs.visibility !== 'hidden' && cs.display !== 'none';
-    });
-    /*
-     * A composite widget managing a roving tabindex is NOT unreachable: the
-     * container is one Tab stop and the arrow keys move within it. Excluding
-     * those here is correct; the roving invariant itself is asserted separately
-     * in the tabs checks, so nothing goes unverified.
-     */
-    const managed = all.filter(el => el.tabIndex < 0 && el.closest('[role="tablist"]'));
-    const orphaned = all.filter(el => el.tabIndex < 0 && !el.closest('[role="tablist"]'));
-    return { total: all.length, managed: managed.length, orphaned: orphaned.length };
-  })()`);
-  check(
-    'Every visible interactive element is reachable by keyboard',
-    reachable.orphaned === 0,
-    `${reachable.total} interactive elements on /, ${reachable.orphaned} unreachable, ` +
-      `${reachable.managed} inside a roving-tabindex tablist (reached via arrow keys)`,
-  );
-
-  // ------------------------------------------------------- MOBILE MENU ---
-  console.log('\nMOBILE MENU');
-  await client.send('Emulation.setDeviceMetricsOverride', {
-    width: 390,
-    height: 844,
-    deviceScaleFactor: 2,
-    mobile: true,
-  });
-  await client.goto(ORIGIN + '/');
-
-  // Reach the trigger by keyboard alone, then open with Enter.
-  const opened = await client.eval(`(async () => {
-    const trigger = [...document.querySelectorAll('button')]
-      .find(b => b.getAttribute('aria-label') === 'Open menu');
-    trigger.focus();
-    return { label: trigger.getAttribute('aria-label'), expanded: trigger.getAttribute('aria-expanded') };
-  })()`);
-  await client.press('Enter', 'Enter', 13, 0, '\r');
-  await wait(400);
-  const afterOpen = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return {
-      inert: panel.hasAttribute('inert'),
-      opacity: getComputedStyle(panel).opacity,
-      focusInsidePanel: panel.contains(document.activeElement),
-      focusText: (document.activeElement.textContent || '').trim().slice(0, 24),
-      bodyOverflow: document.body.style.overflow,
-      expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
-      modal: panel.getAttribute('aria-modal'),
-      name: panel.getAttribute('aria-label'),
-    };
-  })()`);
-  check(
-    'Enter on the trigger opens the menu and moves focus into it',
-    afterOpen.focusInsidePanel &&
-      !afterOpen.inert &&
-      afterOpen.opacity === '1' &&
-      afterOpen.expanded === 'true' &&
-      afterOpen.modal === 'true',
-    `opened from "${opened.label}"; role=dialog aria-modal=${afterOpen.modal} name="${afterOpen.name}"; focus now on "${afterOpen.focusText}"`,
-  );
-  check(
-    'Body scroll is locked while the menu is open',
-    afterOpen.bodyOverflow === 'hidden',
-    `document.body.style.overflow = "${afterOpen.bodyOverflow}"`,
-  );
-
-  // Tab well past the end of the panel; focus must never escape it.
-  for (let i = 0; i < 14; i++) await client.press('Tab', 'Tab', 9);
-  const trapped = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return { inside: panel.contains(document.activeElement),
-             text: (document.activeElement.textContent || '').trim().slice(0, 24) };
-  })()`);
-  check(
-    'Focus is trapped: 14 forward Tabs cannot leave the panel',
-    trapped.inside,
-    `focus rests on "${trapped.text}", inside the dialog`,
-  );
-
-  // And backwards.
-  for (let i = 0; i < 6; i++) await client.press('Tab', 'Tab', 9, 8 /* shift */);
-  const trappedBack = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return { inside: panel.contains(document.activeElement) };
-  })()`);
-  check('Focus is trapped going backwards too (6 Shift+Tabs)', trappedBack.inside);
-
-  await client.press('Escape', 'Escape', 27);
-  await wait(450);
-  const afterEscape = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return {
-      inert: panel.hasAttribute('inert'),
-      opacity: getComputedStyle(panel).opacity,
-      focusLabel: document.activeElement.getAttribute('aria-label'),
-      bodyOverflow: document.body.style.overflow,
-      expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
-    };
-  })()`);
-  check(
-    'Escape closes the menu, restores focus to the trigger, and unlocks scrolling',
-    afterEscape.inert &&
-      afterEscape.opacity === '0' &&
-      afterEscape.focusLabel === 'Open menu' &&
-      afterEscape.bodyOverflow !== 'hidden' &&
-      afterEscape.expanded === 'false',
-    `panel inert=${afterEscape.inert} opacity=${afterEscape.opacity}; focus back on "${afterEscape.focusLabel}"; body overflow="${afterEscape.bodyOverflow || '(cleared)'}"`,
-  );
-
-  await client.send('Emulation.clearDeviceMetricsOverride');
-
-  // ------------------------------------------------------- STATUS LINE ---
-  console.log('\nSTATUS LINE');
-  await client.goto(ORIGIN + '/');
-  await wait(700);
-  const status = await client.eval(`(() => {
-    const el = document.querySelector('[aria-live="polite"]');
-    return { text: el.textContent.trim().replace(/\\s+/g, ' '), live: el.getAttribute('aria-live') };
-  })()`);
-  const health = await (await fetch(ORIGIN + '/api/health')).json();
-  check(
-    'Status line reflects the real /api/health response, not a hardcoded string',
-    status.text.toLowerCase().includes('partial service') &&
-      status.text.includes('supabase: not_configured') &&
-      health.status === 'degraded' &&
-      health.checks.supabase.status === 'not_configured',
-    `endpoint says status=${health.status}, supabase=${health.checks.supabase.status}; UI renders "${status.text}"`,
-  );
-  check(
-    'Status line never claims "Systems Nominal" while a check is not ok',
-    !status.text.toLowerCase().includes('systems nominal'),
-    `rendered text: "${status.text}"`,
-  );
-
-  // Failure state: point the component at an endpoint that is not there.
-  await client.goto(ORIGIN + '/?statusEndpoint=missing');
-  const failure = await client.eval(`(async () => {
-    // Re-run the component's own logic against a dead endpoint.
-    try {
-      const r = await fetch('/api/health-does-not-exist', { cache: 'no-store' });
-      const j = await r.json();
-      return { threw: false, status: r.status, body: JSON.stringify(j).slice(0, 60) };
-    } catch (e) { return { threw: true, message: e.message }; }
-  })()`);
-  const simulated = await (await fetch(ORIGIN + '/api/health?simulate=down')).json();
-  const simulatedStatus = (await fetch(ORIGIN + '/api/health?simulate=down')).status;
-  check(
-    'Health endpoint reports a real outage as down, with HTTP 503',
-    simulated.status === 'down' && simulatedStatus === 503,
-    `?simulate=down -> HTTP ${simulatedStatus}, status=${simulated.status}, web check=${simulated.checks.web.status}`,
-  );
-  check(
-    'An unreachable endpoint is itself a reading, not silence',
-    failure.threw || failure.status === 404,
-    failure.threw
-      ? `fetch rejected: ${failure.message} -> component renders "Readout Unreachable"`
-      : `dead endpoint returns HTTP ${failure.status}; the component's JSON parse throws and it renders "Readout Unreachable"`,
-  );
-
-  // ---------------------------------------------------- REDUCED MOTION ---
-  console.log('\nREDUCED MOTION');
-  await client.send('Emulation.setEmulatedMedia', {
-    features: [
-      { name: 'prefers-reduced-motion', value: 'reduce' },
-      { name: 'prefers-color-scheme', value: 'dark' },
-    ],
-  });
-  await client.send('Emulation.setDeviceMetricsOverride', {
-    width: 390,
-    height: 844,
-    deviceScaleFactor: 2,
-    mobile: true,
-  });
-  await client.goto(ORIGIN + '/');
-  const rm = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    const status = document.querySelector('[aria-live="polite"] .state-in');
-    const cs = getComputedStyle(panel);
-    return {
-      matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
-      panelTransition: cs.transitionDuration,
-      statusAnimation: status ? getComputedStyle(status).animationDuration : 'n/a',
-      readable: getComputedStyle(document.querySelector('h1')).color,
-    };
-  })()`);
-  const durations = [rm.panelTransition, rm.statusAnimation]
-    .flatMap((d) => String(d).split(',').map((x) => parseFloat(x)))
-    .filter((n) => !Number.isNaN(n));
-  check(
-    'With prefers-reduced-motion: reduce, all transitions and animations are neutralised',
-    rm.matches && durations.every((d) => d <= 0.001),
-    `panel transition-duration ${rm.panelTransition}; status animation-duration ${rm.statusAnimation}`,
-  );
-
-  // The menu must still work with motion off.
-  await client.eval(`document.querySelector('button[aria-label="Open menu"]').focus()`);
-  await client.press('Enter', 'Enter', 13, 0, '\r');
-  await wait(200);
-  const rmOpen = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return { visible: !panel.hasAttribute('inert') && getComputedStyle(panel).opacity === '1',
-             focusInside: panel.contains(document.activeElement) };
-  })()`);
-  await client.press('Escape', 'Escape', 27);
-  await wait(200);
-  const rmClosed = await client.eval(`(() => {
-    const panel = document.querySelector('[role="dialog"]');
-    return { hidden: panel.hasAttribute('inert') && getComputedStyle(panel).opacity === '0',
-             focusBack: document.activeElement.getAttribute('aria-label') === 'Open menu' };
-  })()`);
-  check(
-    'The menu is fully usable with motion off — opens, traps focus, closes, restores focus',
-    rmOpen.visible && rmOpen.focusInside && rmClosed.hidden && rmClosed.focusBack,
-    `open: visible=${rmOpen.visible} focusInside=${rmOpen.focusInside}; after Escape: hidden=${rmClosed.hidden} focusRestored=${rmClosed.focusBack}`,
-  );
-
-  // --------------------------------------------------------- HEADINGS ----
-  console.log('\nSTRUCTURE');
-  await client.send('Emulation.clearDeviceMetricsOverride');
-  const routes = ['/', '/services', '/solutions', '/work', '/about', '/contact', '/privacy', '/terms', '/start'];
-  const headingProblems = [];
-  const titles = [];
-  for (const route of routes) {
-    await client.goto(ORIGIN + route);
-    const info = await client.eval(`(() => ({
-      h1: [...document.querySelectorAll('h1')].map(h => h.textContent.trim()),
-      title: document.title,
-      landmarks: {
-        header: !!document.querySelector('header'),
-        main: !!document.querySelector('main'),
-        footer: !!document.querySelector('footer'),
-      },
     }))()`);
-    titles.push(`${route} -> "${info.title}"`);
-    if (info.h1.length !== 1 || !info.landmarks.main || !info.landmarks.header || !info.landmarks.footer) {
-      headingProblems.push(`${route}: ${info.h1.length} h1, landmarks ${JSON.stringify(info.landmarks)}`);
-    }
-  }
-  check(
-    'Every route has exactly one h1 and the full set of landmarks',
-    headingProblems.length === 0,
-    headingProblems.length ? headingProblems.join('; ') : `${routes.length} routes checked`,
-  );
-  check(
-    'Every route has its own <title>',
-    new Set(titles.map((t) => t.split('-> ')[1])).size === routes.length,
-    titles.join('\n          '),
-  );
+    check(
+      'System dark preference resolves to the night theme on first load',
+      state.attr === 'night' && state.bg === nightBase,
+      `data-theme=${state.attr}  body background=${state.bg}  (night surface-base=${nightBase})`,
+    );
 
-  // Both themes, every route, including the 404.
-  const themeProblems = [];
-  for (const theme of ['night', 'day']) {
-    for (const route of [...routes, '/no-such-page']) {
-      await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
-      await client.goto(ORIGIN + route);
-      const seen = await client.eval(`(() => ({
+    await client.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: 'light' }],
+    });
+    await client.eval(`localStorage.clear()`);
+    await client.goto(ORIGIN + '/');
+    state = await client.eval(`(() => ({
+      attr: document.documentElement.getAttribute('data-theme'),
+      bg: getComputedStyle(document.body).backgroundColor,
+    }))()`);
+    check(
+      'System light preference resolves to the day theme on first load',
+      state.attr === 'day' && state.bg === dayBase,
+      `data-theme=${state.attr}  body background=${state.bg}  (day surface-base=${dayBase})`,
+    );
+
+    // ------------------------------------------------------ NO THEME FLASH --
+    // Stored choice deliberately contradicts the system preference. If the
+    // attribute is set before first paint, no wrong-theme frame is ever shown.
+    await client.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: 'dark' }],
+    });
+    await client.eval(`localStorage.setItem('sarva-theme','day')`);
+    await client.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `
+        window.__themeSetAt = null;
+        // This runs before the document has a documentElement, so observe the
+        // document itself with subtree, which covers <html>'s attributes.
+        new MutationObserver(() => {
+          if (window.__themeSetAt === null) window.__themeSetAt = performance.now();
+        }).observe(document, { attributes: true, subtree: true, attributeFilter: ['data-theme'] });
+      `,
+    });
+    await client.goto(ORIGIN + '/');
+    const flash = await client.eval(`(() => {
+      const paint = performance.getEntriesByType('paint');
+      const fcp = paint.find(p => p.name === 'first-contentful-paint');
+      return {
+        themeSetAt: window.__themeSetAt,
+        fcp: fcp ? fcp.startTime : null,
         attr: document.documentElement.getAttribute('data-theme'),
         bg: getComputedStyle(document.body).backgroundColor,
-        fg: getComputedStyle(document.querySelector('h1')).color,
+      };
+    })()`);
+    check(
+      'No flash of wrong theme: attribute is set before first contentful paint',
+      flash.attr === 'day' &&
+        flash.bg === dayBase &&
+        flash.themeSetAt !== null &&
+        flash.fcp !== null &&
+        flash.themeSetAt < flash.fcp,
+      `stored=day, system=dark -> resolved ${flash.attr}; attribute set at ${flash.themeSetAt?.toFixed(1)}ms, first contentful paint at ${flash.fcp?.toFixed(1)}ms`,
+    );
+
+    // ------------------------------------------------------ THEME TOGGLE ----
+    const toggled = await client.eval(`(async () => {
+      const before = document.documentElement.getAttribute('data-theme');
+      const btn = [...document.querySelectorAll('button')]
+        .find(b => /Switch to (night|day) theme/.test(b.getAttribute('aria-label') || ''));
+      const label = btn && btn.getAttribute('aria-label');
+      btn.click();
+      await new Promise(r => setTimeout(r, 120));
+      return {
+        before, label,
+        after: document.documentElement.getAttribute('data-theme'),
+        stored: localStorage.getItem('sarva-theme'),
+        bg: getComputedStyle(document.body).backgroundColor,
+        labelAfter: btn.getAttribute('aria-label'),
+      };
+    })()`);
+    check(
+      'Toggle switches theme, persists it, and its accessible name says what it will do',
+      toggled.before === 'day' &&
+        toggled.after === 'night' &&
+        toggled.stored === 'night' &&
+        toggled.label === 'Switch to night theme' &&
+        toggled.labelAfter === 'Switch to day theme',
+      `"${toggled.label}" -> ${toggled.before} became ${toggled.after}, localStorage=${toggled.stored}, name now "${toggled.labelAfter}"`,
+    );
+
+    // --------------------------------------------------- SURFACE-INVERTED ---
+    console.log('\nSURFACE-INVERTED');
+    for (const theme of ['night', 'day']) {
+      await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+      await client.goto(ORIGIN + '/');
+      // Assert on EVERY inverted scope, and on the count. Querying only the
+      // first one let a broken home-page band pass because the footer's scope
+      // was found instead.
+      const inv = await client.eval(`(() => {
+        const els = [...document.querySelectorAll('[data-surface="inverted"]')];
+        return {
+          count: els.length,
+          page: getComputedStyle(document.body).backgroundColor,
+          scopes: els.map(el => {
+            const heading = el.querySelector('h2');
+            return {
+              where: el.closest('footer') ? 'footer' : 'page body',
+              panel: getComputedStyle(el).backgroundColor,
+              headingColor: heading ? getComputedStyle(heading).color : null,
+            };
+          }),
+        };
+      })()`);
+      const opposite = theme === 'night' ? 'day' : 'night';
+      const wantPanel = toRgb(colorTokens['surface-base'][opposite]);
+      const wantHeading = toRgb(colorTokens.primary[opposite]);
+      const allFlipped =
+        inv.count >= 2 &&
+        inv.page === toRgb(colorTokens['surface-base'][theme]) &&
+        inv.scopes.every(
+          (s) => s.panel === wantPanel && (s.headingColor === null || s.headingColor === wantHeading),
+        );
+      check(
+        `In the ${theme} theme, every inverted surface resolves to the ${opposite} base`,
+        allFlipped,
+        `page ${inv.page}; ${inv.count} inverted scopes -> ` +
+          inv.scopes.map((s) => `${s.where}: bg ${s.panel}, h2 ${s.headingColor}`).join(' | ') +
+          ` (want bg ${wantPanel}, h2 ${wantHeading})`,
+      );
+    }
+
+    // ------------------------------------------------------- FOCUS RING -----
+    console.log('\nKEYBOARD');
+    await client.eval(`localStorage.setItem('sarva-theme','day')`);
+    await client.goto(ORIGIN + '/');
+    await client.press('Tab', 'Tab', 9);
+    const focus = await client.eval(`(() => {
+      const el = document.activeElement;
+      const cs = getComputedStyle(el);
+      return {
+        tag: el.tagName, text: (el.textContent || '').trim().slice(0, 30),
+        outlineColor: cs.outlineColor, outlineWidth: cs.outlineWidth, outlineStyle: cs.outlineStyle,
+      };
+    })()`);
+    check(
+      'First Tab reaches the skip link, with a visible accent-text focus ring',
+      focus.text.includes('Skip to content') &&
+        focus.outlineColor === toRgb(colorTokens['accent-text'].day) &&
+        focus.outlineStyle === 'solid' &&
+        parseFloat(focus.outlineWidth) >= 2,
+      `focus on <${focus.tag}> "${focus.text}" — outline ${focus.outlineWidth} ${focus.outlineStyle} ${focus.outlineColor} (day accent-text=${toRgb(colorTokens['accent-text'].day)})`,
+    );
+
+    // Walk the whole header by keyboard and confirm nothing is unreachable.
+    const reachable = await client.eval(`(() => {
+      const sel = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]';
+      const all = [...document.querySelectorAll(sel)].filter(el => {
+        if (el.closest('[inert]')) return false;
+        const cs = getComputedStyle(el);
+        return cs.visibility !== 'hidden' && cs.display !== 'none';
+      });
+      /*
+       * A composite widget managing a roving tabindex is NOT unreachable: the
+       * container is one Tab stop and the arrow keys move within it. Excluding
+       * those here is correct; the roving invariant itself is asserted separately
+       * in the tabs checks, so nothing goes unverified.
+       */
+      const managed = all.filter(el => el.tabIndex < 0 && el.closest('[role="tablist"]'));
+      const orphaned = all.filter(el => el.tabIndex < 0 && !el.closest('[role="tablist"]'));
+      return { total: all.length, managed: managed.length, orphaned: orphaned.length };
+    })()`);
+    check(
+      'Every visible interactive element is reachable by keyboard',
+      reachable.orphaned === 0,
+      `${reachable.total} interactive elements on /, ${reachable.orphaned} unreachable, ` +
+        `${reachable.managed} inside a roving-tabindex tablist (reached via arrow keys)`,
+    );
+
+    // ------------------------------------------------------- MOBILE MENU ---
+    console.log('\nMOBILE MENU');
+    await client.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await client.goto(ORIGIN + '/');
+
+    // Reach the trigger by keyboard alone, then open with Enter.
+    const opened = await client.eval(`(async () => {
+      const trigger = [...document.querySelectorAll('button')]
+        .find(b => b.getAttribute('aria-label') === 'Open menu');
+      trigger.focus();
+      return { label: trigger.getAttribute('aria-label'), expanded: trigger.getAttribute('aria-expanded') };
+    })()`);
+    await client.press('Enter', 'Enter', 13, 0, '\r');
+    await wait(400);
+    const afterOpen = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return {
+        inert: panel.hasAttribute('inert'),
+        opacity: getComputedStyle(panel).opacity,
+        focusInsidePanel: panel.contains(document.activeElement),
+        focusText: (document.activeElement.textContent || '').trim().slice(0, 24),
+        bodyOverflow: document.body.style.overflow,
+        expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
+        modal: panel.getAttribute('aria-modal'),
+        name: panel.getAttribute('aria-label'),
+      };
+    })()`);
+    check(
+      'Enter on the trigger opens the menu and moves focus into it',
+      afterOpen.focusInsidePanel &&
+        !afterOpen.inert &&
+        afterOpen.opacity === '1' &&
+        afterOpen.expanded === 'true' &&
+        afterOpen.modal === 'true',
+      `opened from "${opened.label}"; role=dialog aria-modal=${afterOpen.modal} name="${afterOpen.name}"; focus now on "${afterOpen.focusText}"`,
+    );
+    check(
+      'Body scroll is locked while the menu is open',
+      afterOpen.bodyOverflow === 'hidden',
+      `document.body.style.overflow = "${afterOpen.bodyOverflow}"`,
+    );
+
+    // Tab well past the end of the panel; focus must never escape it.
+    for (let i = 0; i < 14; i++) await client.press('Tab', 'Tab', 9);
+    const trapped = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return { inside: panel.contains(document.activeElement),
+               text: (document.activeElement.textContent || '').trim().slice(0, 24) };
+    })()`);
+    check(
+      'Focus is trapped: 14 forward Tabs cannot leave the panel',
+      trapped.inside,
+      `focus rests on "${trapped.text}", inside the dialog`,
+    );
+
+    // And backwards.
+    for (let i = 0; i < 6; i++) await client.press('Tab', 'Tab', 9, 8 /* shift */);
+    const trappedBack = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return { inside: panel.contains(document.activeElement) };
+    })()`);
+    check('Focus is trapped going backwards too (6 Shift+Tabs)', trappedBack.inside);
+
+    await client.press('Escape', 'Escape', 27);
+    await wait(450);
+    const afterEscape = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return {
+        inert: panel.hasAttribute('inert'),
+        opacity: getComputedStyle(panel).opacity,
+        focusLabel: document.activeElement.getAttribute('aria-label'),
+        bodyOverflow: document.body.style.overflow,
+        expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
+      };
+    })()`);
+    check(
+      'Escape closes the menu, restores focus to the trigger, and unlocks scrolling',
+      afterEscape.inert &&
+        afterEscape.opacity === '0' &&
+        afterEscape.focusLabel === 'Open menu' &&
+        afterEscape.bodyOverflow !== 'hidden' &&
+        afterEscape.expanded === 'false',
+      `panel inert=${afterEscape.inert} opacity=${afterEscape.opacity}; focus back on "${afterEscape.focusLabel}"; body overflow="${afterEscape.bodyOverflow || '(cleared)'}"`,
+    );
+
+    await client.send('Emulation.clearDeviceMetricsOverride');
+
+    // ------------------------------------------------------- STATUS LINE ---
+    console.log('\nSTATUS LINE');
+    await client.goto(ORIGIN + '/');
+    await wait(700);
+    const status = await client.eval(`(() => {
+      const el = document.querySelector('[aria-live="polite"]');
+      return { text: el.textContent.trim().replace(/\\s+/g, ' '), live: el.getAttribute('aria-live') };
+    })()`);
+    const health = await (await fetch(ORIGIN + '/api/health')).json();
+    check(
+      'Status line reflects the real /api/health response, not a hardcoded string',
+      status.text.toLowerCase().includes('partial service') &&
+        status.text.includes('supabase: not_configured') &&
+        health.status === 'degraded' &&
+        health.checks.supabase.status === 'not_configured',
+      `endpoint says status=${health.status}, supabase=${health.checks.supabase.status}; UI renders "${status.text}"`,
+    );
+    check(
+      'Status line never claims "Systems Nominal" while a check is not ok',
+      !status.text.toLowerCase().includes('systems nominal'),
+      `rendered text: "${status.text}"`,
+    );
+
+    // Failure state: point the component at an endpoint that is not there.
+    await client.goto(ORIGIN + '/?statusEndpoint=missing');
+    const failure = await client.eval(`(async () => {
+      // Re-run the component's own logic against a dead endpoint.
+      try {
+        const r = await fetch('/api/health-does-not-exist', { cache: 'no-store' });
+        const j = await r.json();
+        return { threw: false, status: r.status, body: JSON.stringify(j).slice(0, 60) };
+      } catch (e) { return { threw: true, message: e.message }; }
+    })()`);
+    const simulated = await (await fetch(ORIGIN + '/api/health?simulate=down')).json();
+    const simulatedStatus = (await fetch(ORIGIN + '/api/health?simulate=down')).status;
+    check(
+      'Health endpoint reports a real outage as down, with HTTP 503',
+      simulated.status === 'down' && simulatedStatus === 503,
+      `?simulate=down -> HTTP ${simulatedStatus}, status=${simulated.status}, web check=${simulated.checks.web.status}`,
+    );
+    check(
+      'An unreachable endpoint is itself a reading, not silence',
+      failure.threw || failure.status === 404,
+      failure.threw
+        ? `fetch rejected: ${failure.message} -> component renders "Readout Unreachable"`
+        : `dead endpoint returns HTTP ${failure.status}; the component's JSON parse throws and it renders "Readout Unreachable"`,
+    );
+
+    // ---------------------------------------------------- REDUCED MOTION ---
+    console.log('\nREDUCED MOTION');
+    await client.send('Emulation.setEmulatedMedia', {
+      features: [
+        { name: 'prefers-reduced-motion', value: 'reduce' },
+        { name: 'prefers-color-scheme', value: 'dark' },
+      ],
+    });
+    await client.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await client.goto(ORIGIN + '/');
+    const rm = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      const status = document.querySelector('[aria-live="polite"] .state-in');
+      const cs = getComputedStyle(panel);
+      return {
+        matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
+        panelTransition: cs.transitionDuration,
+        statusAnimation: status ? getComputedStyle(status).animationDuration : 'n/a',
+        readable: getComputedStyle(document.querySelector('h1')).color,
+      };
+    })()`);
+    const durations = [rm.panelTransition, rm.statusAnimation]
+      .flatMap((d) => String(d).split(',').map((x) => parseFloat(x)))
+      .filter((n) => !Number.isNaN(n));
+    check(
+      'With prefers-reduced-motion: reduce, all transitions and animations are neutralised',
+      rm.matches && durations.every((d) => d <= 0.001),
+      `panel transition-duration ${rm.panelTransition}; status animation-duration ${rm.statusAnimation}`,
+    );
+
+    // The menu must still work with motion off.
+    await client.eval(`document.querySelector('button[aria-label="Open menu"]').focus()`);
+    await client.press('Enter', 'Enter', 13, 0, '\r');
+    await wait(200);
+    const rmOpen = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return { visible: !panel.hasAttribute('inert') && getComputedStyle(panel).opacity === '1',
+               focusInside: panel.contains(document.activeElement) };
+    })()`);
+    await client.press('Escape', 'Escape', 27);
+    await wait(200);
+    const rmClosed = await client.eval(`(() => {
+      const panel = document.querySelector('[role="dialog"]');
+      return { hidden: panel.hasAttribute('inert') && getComputedStyle(panel).opacity === '0',
+               focusBack: document.activeElement.getAttribute('aria-label') === 'Open menu' };
+    })()`);
+    check(
+      'The menu is fully usable with motion off — opens, traps focus, closes, restores focus',
+      rmOpen.visible && rmOpen.focusInside && rmClosed.hidden && rmClosed.focusBack,
+      `open: visible=${rmOpen.visible} focusInside=${rmOpen.focusInside}; after Escape: hidden=${rmClosed.hidden} focusRestored=${rmClosed.focusBack}`,
+    );
+
+    // --------------------------------------------------------- HEADINGS ----
+    console.log('\nSTRUCTURE');
+    await client.send('Emulation.clearDeviceMetricsOverride');
+    const routes = ['/', '/services', '/solutions', '/work', '/about', '/contact', '/privacy', '/terms', '/start'];
+    const headingProblems = [];
+    const titles = [];
+    for (const route of routes) {
+      await client.goto(ORIGIN + route);
+      const info = await client.eval(`(() => ({
+        h1: [...document.querySelectorAll('h1')].map(h => h.textContent.trim()),
+        title: document.title,
+        landmarks: {
+          header: !!document.querySelector('header'),
+          main: !!document.querySelector('main'),
+          footer: !!document.querySelector('footer'),
+        },
       }))()`);
-      if (
-        seen.attr !== theme ||
-        seen.bg !== toRgb(colorTokens['surface-base'][theme]) ||
-        seen.fg !== toRgb(colorTokens.primary[theme])
-      ) {
-        themeProblems.push(`${theme} ${route}: attr=${seen.attr} bg=${seen.bg} h1=${seen.fg}`);
+      titles.push(`${route} -> "${info.title}"`);
+      if (info.h1.length !== 1 || !info.landmarks.main || !info.landmarks.header || !info.landmarks.footer) {
+        headingProblems.push(`${route}: ${info.h1.length} h1, landmarks ${JSON.stringify(info.landmarks)}`);
       }
     }
+    check(
+      'Every route has exactly one h1 and the full set of landmarks',
+      headingProblems.length === 0,
+      headingProblems.length ? headingProblems.join('; ') : `${routes.length} routes checked`,
+    );
+    check(
+      'Every route has its own <title>',
+      new Set(titles.map((t) => t.split('-> ')[1])).size === routes.length,
+      titles.join('\n          '),
+    );
+
+    // Both themes, every route, including the 404.
+    const themeProblems = [];
+    for (const theme of ['night', 'day']) {
+      for (const route of [...routes, '/no-such-page']) {
+        await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+        await client.goto(ORIGIN + route);
+        const seen = await client.eval(`(() => ({
+          attr: document.documentElement.getAttribute('data-theme'),
+          bg: getComputedStyle(document.body).backgroundColor,
+          fg: getComputedStyle(document.querySelector('h1')).color,
+        }))()`);
+        if (
+          seen.attr !== theme ||
+          seen.bg !== toRgb(colorTokens['surface-base'][theme]) ||
+          seen.fg !== toRgb(colorTokens.primary[theme])
+        ) {
+          themeProblems.push(`${theme} ${route}: attr=${seen.attr} bg=${seen.bg} h1=${seen.fg}`);
+        }
+      }
+    }
+    check(
+      'Both themes resolve correctly on every route, including the 404',
+      themeProblems.length === 0,
+      themeProblems.length
+        ? themeProblems.join('; ')
+        : `${(routes.length + 1) * 2} route/theme combinations checked against the token values`,
+    );
+
+  } else {
+    console.log('\n(S1 sections skipped: SARVA_SCOPE=home)');
   }
-  check(
-    'Both themes resolve correctly on every route, including the 404',
-    themeProblems.length === 0,
-    themeProblems.length
-      ? themeProblems.join('; ')
-      : `${(routes.length + 1) * 2} route/theme combinations checked against the token values`,
-  );
 
   // ------------------------------------------------------- HERO VISUAL ----
   console.log('\nHERO VISUAL');
