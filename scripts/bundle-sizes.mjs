@@ -81,9 +81,12 @@ const chromePath =
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const profile = mkdtempSync(join(tmpdir(), 'sarva-deferred-'));
+// Ephemeral port, for the same reason as scripts/verify-ui.mjs: an orphaned
+// Chrome holding a fixed port makes a later run drive the wrong browser.
 const chrome = spawn(chromePath, [
   '--headless=new',
-  '--remote-debugging-port=9377',
+  '--remote-debugging-port=0',
+  '--remote-debugging-address=127.0.0.1',
   `--user-data-dir=${profile}`,
   '--no-first-run',
 ]);
@@ -91,11 +94,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let deferredFailures = 0;
 try {
+  let port = null;
+  for (let i = 0; i < 60 && !port; i++) {
+    await sleep(200);
+    try {
+      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split('\n')[0];
+      if (line?.trim()) port = Number(line.trim());
+    } catch {
+      /* not written yet */
+    }
+  }
+  if (!port) throw new Error('Chrome never reported a debugging port.');
+
   let target = null;
   for (let i = 0; i < 40 && !target; i++) {
-    await sleep(300);
+    await sleep(250);
     try {
-      const list = await (await fetch('http://127.0.0.1:9377/json/list')).json();
+      const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       target = list.find((t) => t.type === 'page');
     } catch {
       /* not up yet */

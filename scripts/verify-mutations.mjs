@@ -270,11 +270,21 @@ async function runSuite() {
         /* not up yet */
       }
     }
+    /*
+     * Hard ceiling. A mutation can put the page into a state a check waits on
+     * forever; one hung run must not consume the whole session. Exceeding this
+     * is reported as inconclusive, never as a pass.
+     */
     const suite = spawnSync('node', [join(root, 'scripts/verify-ui.mjs'), ORIGIN], {
       cwd: root,
       encoding: 'utf-8',
       env: { ...process.env, SARVA_SCOPE: 'home' },
+      timeout: 8 * 60 * 1000,
+      killSignal: 'SIGKILL',
     });
+    if (suite.error?.code === 'ETIMEDOUT' || suite.signal === 'SIGKILL') {
+      return { timedOut: true, buildFailed: false, output: `${suite.stdout ?? ''}${suite.stderr ?? ''}` };
+    }
     return { buildFailed: false, output: `${suite.stdout ?? ''}${suite.stderr ?? ''}` };
   } finally {
     try {
@@ -300,7 +310,7 @@ console.log('\nMUTATION TESTING — each check run against the defect it exists 
 try {
   for (const mutation of MUTATIONS) {
     apply(mutation);
-    const { buildFailed, output } = await runSuite();
+    const { buildFailed, timedOut, output } = await runSuite();
 
     const problems = restoreAll();
     if (problems.length) {
@@ -308,10 +318,11 @@ try {
       process.exit(3);
     }
 
-    if (buildFailed) {
+    if (buildFailed || timedOut) {
       undetected++;
-      results.push({ mutation, caught: false, failures: ['(mutation did not compile)'] });
-      console.log(`  SKIP  ${mutation.name}\n          mutation did not compile`);
+      const why = buildFailed ? '(mutation did not compile)' : '(suite timed out — inconclusive)';
+      results.push({ mutation, caught: false, failures: [why] });
+      console.log(`  SKIP  ${mutation.name}\n          ${why}`);
       continue;
     }
 

@@ -7,7 +7,7 @@
  * Usage: node scripts/verify-ui.mjs http://localhost:3210
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { colorTokens } from '../lib/tokens.data.mjs';
@@ -55,10 +55,26 @@ class CDP {
     if (!this.handlers.has(method)) this.handlers.set(method, []);
     this.handlers.get(method).push(fn);
   }
-  send(method, params = {}) {
+  send(method, params = {}, timeoutMs = 30000) {
     const id = ++this.id;
     this.ws.send(JSON.stringify({ id, method, params }));
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    return new Promise((resolve, reject) => {
+      // A command that never answers must reject, not stall the whole suite.
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`CDP ${method} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
+    });
   }
   async eval(expression) {
     const r = await this.send('Runtime.evaluate', {
@@ -83,10 +99,16 @@ class CDP {
     }
   }
 
-  async goto(url) {
-    const done = new Promise((resolve) => this.on('Page.loadEventFired', resolve));
+  async goto(url, timeoutMs = 30000) {
+    let settle;
+    const done = new Promise((resolve) => {
+      settle = resolve;
+      this.on('Page.loadEventFired', resolve);
+    });
     await this.send('Page.navigate', { url });
+    const timer = setTimeout(() => settle(), timeoutMs);
     await done;
+    clearTimeout(timer);
     await wait(250);
   }
   async key(type, key, code, keyCode, modifiers = 0) {
@@ -132,9 +154,17 @@ function toRgb(hex) {
 }
 
 const profile = mkdtempSync(join(tmpdir(), 'sarva-cdp-'));
+/*
+ * Port 0 means "pick a free one and write it to DevToolsActivePort". A fixed
+ * port looked fine until an orphaned Chrome from a killed run kept holding it:
+ * the new instance bound the same port on IPv6, 127.0.0.1 resolved to the OLD
+ * browser, and the suite waited forever for a load event from a page it was
+ * not driving. An ephemeral port makes that collision impossible.
+ */
 const chrome = spawn(CHROME, [
   '--headless=new',
-  '--remote-debugging-port=9333',
+  '--remote-debugging-port=0',
+  '--remote-debugging-address=127.0.0.1',
   `--user-data-dir=${profile}`,
   '--no-first-run',
   '--no-default-browser-check',
@@ -144,12 +174,24 @@ const chrome = spawn(CHROME, [
 
 let client;
 try {
-  // Wait for the debugging endpoint.
+  // Read the port Chrome actually chose, then find its page.
+  let port = null;
+  for (let i = 0; i < 60 && !port; i++) {
+    await wait(200);
+    try {
+      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split('\n')[0];
+      if (line?.trim()) port = Number(line.trim());
+    } catch {
+      /* not written yet */
+    }
+  }
+  if (!port) throw new Error('Chrome never reported a debugging port.');
+
   let target = null;
   for (let i = 0; i < 40 && !target; i++) {
-    await wait(300);
+    await wait(250);
     try {
-      const list = await (await fetch('http://127.0.0.1:9333/json/list')).json();
+      const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       target = list.find((t) => t.type === 'page');
     } catch {
       /* not up yet */
