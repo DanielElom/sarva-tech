@@ -204,6 +204,14 @@ try {
   await client.send('Runtime.enable');
   await client.send('DOM.enable');
   await client.send('Network.enable');
+  /*
+   * Headless pages can end up treated as unfocused, and Chrome then reports
+   * document.hidden === true. The hero loop pauses on exactly that signal, so
+   * the suite was watching a correctly-paused animation and calling it a
+   * failure. This keeps the page focused for the whole session, which is what
+   * a visitor looking at the tab actually looks like.
+   */
+  await client.send('Emulation.setFocusEmulationEnabled', { enabled: true });
 
   /** Every script the browser actually fetched, in order. */
   let scriptRequests = [];
@@ -675,6 +683,17 @@ try {
   // ------------------------------------------------------- HERO VISUAL ----
   console.log('\nHERO VISUAL');
 
+  /*
+   * Reset every emulation override before this section rather than assuming
+   * what the previous one left behind. The reduced-motion section sets
+   * `reduce` and nothing after it cleared that, so these checks inherited it
+   * and the animated layer behaved differently depending on which sections had
+   * run first. State that leaks between checks makes a suite that passes or
+   * fails for reasons unrelated to the code under test.
+   */
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+
   const heroSelectors = `(() => ({
     panels: document.querySelectorAll('[data-hero-panel]').length,
     canvases: document.querySelectorAll('[data-hero-canvas]').length,
@@ -716,12 +735,27 @@ try {
     if (!canvas) return { state: 'absent', before: 0, after: 0 };
     const before = canvas.__heroFrames ?? 0;
     await new Promise(r => setTimeout(r, 500));
-    return { state: canvas.dataset.state, before, after: canvas.__heroFrames ?? 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      state: canvas.dataset.state,
+      before,
+      after: canvas.__heroFrames ?? 0,
+      rect: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+      client: [canvas.clientWidth, canvas.clientHeight],
+      scrollY: window.scrollY,
+      viewport: [innerWidth, innerHeight],
+      reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      wide: matchMedia('(min-width: 768px)').matches,
+      hidden: document.hidden,
+    };
   })()`);
   check(
     'The rAF loop runs while the panel is on screen',
     running.state === 'running' && running.after > running.before,
-    `data-state=${running.state}, frames ${running.before} -> ${running.after}`,
+    `data-state=${running.state}, frames ${running.before} -> ${running.after}, ` +
+      `rect=${JSON.stringify(running.rect)} client=${JSON.stringify(running.client)} ` +
+      `scrollY=${running.scrollY} viewport=${JSON.stringify(running.viewport)} ` +
+      `reduced=${running.reduced} wide=${running.wide} tabHidden=${running.hidden}`,
   );
 
   // -- Off-screen: the loop must stop, not merely slow down.

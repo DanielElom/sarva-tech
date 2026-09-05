@@ -46,6 +46,27 @@ const DOT: Record<Reading['kind'], string> = {
  * every route, and chrome does not get to put an animation library in the
  * shared bundle (CLAUDE.md 6).
  */
+/**
+ * One request per page, however many readouts are on it. The homepage has two —
+ * one in the hero, one in the footer — and they were each opening their own
+ * connection to the same endpoint and parsing the same body. The promise is
+ * keyed by endpoint and deliberately not cached across time: a readout that
+ * reuses a stale answer would be exactly the dishonesty CLAUDE.md 8 forbids.
+ */
+const inFlight = new Map<string, Promise<HealthReport>>();
+
+function fetchHealth(endpoint: string, signal: AbortSignal): Promise<HealthReport> {
+  const existing = inFlight.get(endpoint);
+  if (existing) return existing;
+  const request = fetch(endpoint, { cache: 'no-store', signal })
+    .then((response) => response.json() as Promise<HealthReport>)
+    .finally(() => {
+      inFlight.delete(endpoint);
+    });
+  inFlight.set(endpoint, request);
+  return request;
+}
+
 export function StatusLine({
   endpoint = '/api/health',
   className,
@@ -70,11 +91,7 @@ export function StatusLine({
     const run = async () => {
       timeout = setTimeout(() => controller.abort(), 6000);
       try {
-        const response = await fetch(endpoint, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        const report = (await response.json()) as HealthReport;
+        const report = await fetchHealth(endpoint, controller.signal);
         if (!report || typeof report.status !== 'string') {
           throw new Error('Malformed health report');
         }
@@ -115,14 +132,19 @@ export function StatusLine({
     reading.kind === 'unreachable'
       ? reading.reason
       : reading.kind === 'checking'
-        ? null
+        ? // Not a placeholder for its own sake: this is what it is doing, and
+          // it keeps the row occupied so the settled reading cannot change the
+          // height of the box and shift everything below it.
+          `GET ${endpoint}`
         : Object.entries(reading.report.checks)
             .map(([name, check]) => `${name}: ${check.status}`)
             .join(' · ');
 
   return (
     <p
-      className={cn('flex flex-wrap items-center gap-x-3 gap-y-1', className)}
+      // Two fixed rows rather than a wrapping line. The reading changes length
+      // as it resolves, and a flex-wrap row grows by a line when it does.
+      className={cn('flex flex-col gap-1', className)}
       // The reading arrives after paint and can change again. Announce it,
       // politely, rather than letting it mutate silently.
       aria-live="polite"

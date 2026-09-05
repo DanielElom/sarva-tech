@@ -1,11 +1,11 @@
 import { Container } from '@/components/ui/container';
 import { ButtonLink } from '@/components/ui/button';
 import { Logo } from './logo';
-import { NavLink } from './nav-link';
+import { NavLinks } from './nav-links';
 import { ThemeToggle } from './theme-toggle';
 import { MobileMenu } from './mobile-menu';
 import { HeaderScroll } from './header-scroll';
-import { PRIMARY_CTA, PRIMARY_NAV } from '@/lib/site';
+import { PRIMARY_CTA } from '@/lib/site';
 
 const HEADER_ID = 'site-header';
 
@@ -28,13 +28,7 @@ export function Navbar() {
       <Container as="nav" aria-label="Primary" className="site-header-bar">
         <Logo />
 
-        <ul className="hidden items-center gap-1 md:flex">
-          {PRIMARY_NAV.map((link) => (
-            <li key={link.href}>
-              <NavLink href={link.href} label={link.label} />
-            </li>
-          ))}
-        </ul>
+        <NavLinks />
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
