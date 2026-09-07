@@ -106,6 +106,26 @@ const MUTATIONS = [
     expect: 'Seven tabs, seven panels, exactly one selected and one visible',
   },
   {
+    name: 'Panel capped in width again — a strip of the page shows beside it',
+    file: 'components/chrome/mobile-menu.tsx',
+    find: "          'sheet fixed inset-0 z-50 flex w-full flex-col md:hidden',",
+    replace:
+      "          'sheet fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col md:hidden',",
+    artefact: 'max-w-sm',
+    expect: 'The open panel covers the whole viewport',
+  },
+  {
+    name: 'Initial focus falls back to the first focusable (the wordmark)',
+    file: 'components/chrome/mobile-menu.tsx',
+    find:
+      '      const target =\n' +
+      '        closeRef.current ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);',
+    replace:
+      '      const target = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);',
+    artefact: 'const target = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);',
+    expect: 'Initial focus lands on the close button',
+  },
+  {
     name: 'Inverted surface marker dropped from the stages section',
     file: 'components/sections/problem-first.tsx',
     find: '    <section data-surface="inverted" aria-labelledby={`${baseId}-heading`}>',
