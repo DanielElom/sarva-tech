@@ -14,15 +14,16 @@ import { colorTokens } from '../lib/tokens.data.mjs';
 
 const ORIGIN = process.argv[2] ?? 'http://localhost:3210';
 const CHROME =
-  process.env.CHROME_PATH ??
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const results = [];
 function check(name, pass, detail = '') {
   results.push({ name, pass, detail });
-  console.log(`  ${pass ? 'ok  ' : 'FAIL'}  ${name}${detail ? `\n          ${detail}` : ''}`);
+  console.log(
+    `  ${pass ? 'ok  ' : 'FAIL'}  ${name}${detail ? `\n          ${detail}` : ''}`,
+  );
 }
 
 /** Minimal CDP client. */
@@ -179,7 +180,9 @@ try {
   for (let i = 0; i < 60 && !port; i++) {
     await wait(200);
     try {
-      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split('\n')[0];
+      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split(
+        '\n',
+      )[0];
       if (line?.trim()) port = Number(line.trim());
     } catch {
       /* not written yet */
@@ -233,7 +236,7 @@ try {
    * these do not exercise anything a homepage mutation can break, so they are
    * skippable there. Never skipped in a normal run.
    */
-  if (process.env.SARVA_SCOPE !== "home") {
+  if (process.env.SARVA_SCOPE !== 'home') {
     // ---------------------------------------------------------------- THEME --
     console.log('\nTHEME');
 
@@ -360,13 +363,17 @@ try {
         inv.count >= 2 &&
         inv.page === toRgb(colorTokens['surface-base'][theme]) &&
         inv.scopes.every(
-          (s) => s.panel === wantPanel && (s.headingColor === null || s.headingColor === wantHeading),
+          (s) =>
+            s.panel === wantPanel &&
+            (s.headingColor === null || s.headingColor === wantHeading),
         );
       check(
         `In the ${theme} theme, every inverted surface resolves to the ${opposite} base`,
         allFlipped,
         `page ${inv.page}; ${inv.count} inverted scopes -> ` +
-          inv.scopes.map((s) => `${s.where}: bg ${s.panel}, h2 ${s.headingColor}`).join(' | ') +
+          inv.scopes
+            .map((s) => `${s.where}: bg ${s.panel}, h2 ${s.headingColor}`)
+            .join(' | ') +
           ` (want bg ${wantPanel}, h2 ${wantHeading})`,
       );
     }
@@ -417,98 +424,6 @@ try {
       `${reachable.total} interactive elements on /, ${reachable.orphaned} unreachable, ` +
         `${reachable.managed} inside a roving-tabindex tablist (reached via arrow keys)`,
     );
-
-    // ------------------------------------------------------- MOBILE MENU ---
-    console.log('\nMOBILE MENU');
-    await client.send('Emulation.setDeviceMetricsOverride', {
-      width: 390,
-      height: 844,
-      deviceScaleFactor: 2,
-      mobile: true,
-    });
-    await client.goto(ORIGIN + '/');
-
-    // Reach the trigger by keyboard alone, then open with Enter.
-    const opened = await client.eval(`(async () => {
-      const trigger = [...document.querySelectorAll('button')]
-        .find(b => b.getAttribute('aria-label') === 'Open menu');
-      trigger.focus();
-      return { label: trigger.getAttribute('aria-label'), expanded: trigger.getAttribute('aria-expanded') };
-    })()`);
-    await client.press('Enter', 'Enter', 13, 0, '\r');
-    await wait(400);
-    const afterOpen = await client.eval(`(() => {
-      const panel = document.querySelector('[role="dialog"]');
-      return {
-        inert: panel.hasAttribute('inert'),
-        opacity: getComputedStyle(panel).opacity,
-        focusInsidePanel: panel.contains(document.activeElement),
-        focusText: (document.activeElement.textContent || '').trim().slice(0, 24),
-        bodyOverflow: document.body.style.overflow,
-        expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
-        modal: panel.getAttribute('aria-modal'),
-        name: panel.getAttribute('aria-label'),
-      };
-    })()`);
-    check(
-      'Enter on the trigger opens the menu and moves focus into it',
-      afterOpen.focusInsidePanel &&
-        !afterOpen.inert &&
-        afterOpen.opacity === '1' &&
-        afterOpen.expanded === 'true' &&
-        afterOpen.modal === 'true',
-      `opened from "${opened.label}"; role=dialog aria-modal=${afterOpen.modal} name="${afterOpen.name}"; focus now on "${afterOpen.focusText}"`,
-    );
-    check(
-      'Body scroll is locked while the menu is open',
-      afterOpen.bodyOverflow === 'hidden',
-      `document.body.style.overflow = "${afterOpen.bodyOverflow}"`,
-    );
-
-    // Tab well past the end of the panel; focus must never escape it.
-    for (let i = 0; i < 14; i++) await client.press('Tab', 'Tab', 9);
-    const trapped = await client.eval(`(() => {
-      const panel = document.querySelector('[role="dialog"]');
-      return { inside: panel.contains(document.activeElement),
-               text: (document.activeElement.textContent || '').trim().slice(0, 24) };
-    })()`);
-    check(
-      'Focus is trapped: 14 forward Tabs cannot leave the panel',
-      trapped.inside,
-      `focus rests on "${trapped.text}", inside the dialog`,
-    );
-
-    // And backwards.
-    for (let i = 0; i < 6; i++) await client.press('Tab', 'Tab', 9, 8 /* shift */);
-    const trappedBack = await client.eval(`(() => {
-      const panel = document.querySelector('[role="dialog"]');
-      return { inside: panel.contains(document.activeElement) };
-    })()`);
-    check('Focus is trapped going backwards too (6 Shift+Tabs)', trappedBack.inside);
-
-    await client.press('Escape', 'Escape', 27);
-    await wait(450);
-    const afterEscape = await client.eval(`(() => {
-      const panel = document.querySelector('[role="dialog"]');
-      return {
-        inert: panel.hasAttribute('inert'),
-        opacity: getComputedStyle(panel).opacity,
-        focusLabel: document.activeElement.getAttribute('aria-label'),
-        bodyOverflow: document.body.style.overflow,
-        expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
-      };
-    })()`);
-    check(
-      'Escape closes the menu, restores focus to the trigger, and unlocks scrolling',
-      afterEscape.inert &&
-        afterEscape.opacity === '0' &&
-        afterEscape.focusLabel === 'Open menu' &&
-        afterEscape.bodyOverflow !== 'hidden' &&
-        afterEscape.expanded === 'false',
-      `panel inert=${afterEscape.inert} opacity=${afterEscape.opacity}; focus back on "${afterEscape.focusLabel}"; body overflow="${afterEscape.bodyOverflow || '(cleared)'}"`,
-    );
-
-    await client.send('Emulation.clearDeviceMetricsOverride');
 
     // ------------------------------------------------------- STATUS LINE ---
     console.log('\nSTATUS LINE');
@@ -585,7 +500,11 @@ try {
       };
     })()`);
     const durations = [rm.panelTransition, rm.statusAnimation]
-      .flatMap((d) => String(d).split(',').map((x) => parseFloat(x)))
+      .flatMap((d) =>
+        String(d)
+          .split(',')
+          .map((x) => parseFloat(x)),
+      )
       .filter((n) => !Number.isNaN(n));
     check(
       'With prefers-reduced-motion: reduce, all transitions and animations are neutralised',
@@ -618,7 +537,17 @@ try {
     // --------------------------------------------------------- HEADINGS ----
     console.log('\nSTRUCTURE');
     await client.send('Emulation.clearDeviceMetricsOverride');
-    const routes = ['/', '/services', '/solutions', '/work', '/about', '/contact', '/privacy', '/terms', '/start'];
+    const routes = [
+      '/',
+      '/services',
+      '/solutions',
+      '/work',
+      '/about',
+      '/contact',
+      '/privacy',
+      '/terms',
+      '/start',
+    ];
     const headingProblems = [];
     const titles = [];
     for (const route of routes) {
@@ -633,14 +562,23 @@ try {
         },
       }))()`);
       titles.push(`${route} -> "${info.title}"`);
-      if (info.h1.length !== 1 || !info.landmarks.main || !info.landmarks.header || !info.landmarks.footer) {
-        headingProblems.push(`${route}: ${info.h1.length} h1, landmarks ${JSON.stringify(info.landmarks)}`);
+      if (
+        info.h1.length !== 1 ||
+        !info.landmarks.main ||
+        !info.landmarks.header ||
+        !info.landmarks.footer
+      ) {
+        headingProblems.push(
+          `${route}: ${info.h1.length} h1, landmarks ${JSON.stringify(info.landmarks)}`,
+        );
       }
     }
     check(
       'Every route has exactly one h1 and the full set of landmarks',
       headingProblems.length === 0,
-      headingProblems.length ? headingProblems.join('; ') : `${routes.length} routes checked`,
+      headingProblems.length
+        ? headingProblems.join('; ')
+        : `${routes.length} routes checked`,
     );
     check(
       'Every route has its own <title>',
@@ -664,7 +602,9 @@ try {
           seen.bg !== toRgb(colorTokens['surface-base'][theme]) ||
           seen.fg !== toRgb(colorTokens.primary[theme])
         ) {
-          themeProblems.push(`${theme} ${route}: attr=${seen.attr} bg=${seen.bg} h1=${seen.fg}`);
+          themeProblems.push(
+            `${theme} ${route}: attr=${seen.attr} bg=${seen.bg} h1=${seen.fg}`,
+          );
         }
       }
     }
@@ -675,10 +615,128 @@ try {
         ? themeProblems.join('; ')
         : `${(routes.length + 1) * 2} route/theme combinations checked against the token values`,
     );
-
   } else {
     console.log('\n(S1 sections skipped: SARVA_SCOPE=home)');
   }
+
+  /*
+   * Kept outside the S1 scope gate: the mobile menu is a mutation target, so
+   * it has to run in scoped mutation runs too. It sets and clears its own
+   * device metrics, so it is safe to run in any order.
+   */
+  // ------------------------------------------------------- MOBILE MENU ---
+  console.log('\nMOBILE MENU');
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await client.goto(ORIGIN + '/');
+
+  // Reach the trigger by keyboard alone, then open with Enter.
+  const opened = await client.eval(`(async () => {
+    const trigger = [...document.querySelectorAll('button')]
+      .find(b => b.getAttribute('aria-label') === 'Open menu');
+    trigger.focus();
+    return { label: trigger.getAttribute('aria-label'), expanded: trigger.getAttribute('aria-expanded') };
+  })()`);
+  await client.press('Enter', 'Enter', 13, 0, '\r');
+  await wait(400);
+  const afterOpen = await client.eval(`(() => {
+    const panel = document.querySelector('[role="dialog"]');
+    const rect = panel.getBoundingClientRect();
+    const active = document.activeElement;
+    return {
+      inert: panel.hasAttribute('inert'),
+      opacity: getComputedStyle(panel).opacity,
+      focusInsidePanel: panel.contains(active),
+      // The accessible name of whatever holds focus, not its text: the close
+      // control is an icon button and has no text content.
+      focusName: active
+        ? active.getAttribute('aria-label') || (active.textContent || '').trim().slice(0, 24)
+        : null,
+      bodyOverflow: document.body.style.overflow,
+      expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
+      modal: panel.getAttribute('aria-modal'),
+      name: panel.getAttribute('aria-label'),
+      // Coverage: no strip of the page may show beside the open panel.
+      rect: [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)],
+      viewport: [window.innerWidth, window.innerHeight],
+    };
+  })()`);
+  check(
+    'Enter on the trigger opens the menu and moves focus into it',
+    afterOpen.focusInsidePanel &&
+      !afterOpen.inert &&
+      afterOpen.opacity === '1' &&
+      afterOpen.expanded === 'true' &&
+      afterOpen.modal === 'true',
+    `opened from "${opened.label}"; role=dialog aria-modal=${afterOpen.modal} name="${afterOpen.name}"; focus now on "${afterOpen.focusName}"`,
+  );
+  check(
+    'Initial focus lands on the close button, not the wordmark',
+    afterOpen.focusName === 'Close menu',
+    `focus is on "${afterOpen.focusName}" (want "Close menu")`,
+  );
+  check(
+    'The open panel covers the whole viewport, leaving no strip of the page beside it',
+    afterOpen.rect[0] === 0 &&
+      afterOpen.rect[1] === 0 &&
+      afterOpen.rect[2] === afterOpen.viewport[0] &&
+      afterOpen.rect[3] === afterOpen.viewport[1],
+    `panel rect ${JSON.stringify(afterOpen.rect)} vs viewport ${JSON.stringify(afterOpen.viewport)}`,
+  );
+  check(
+    'Body scroll is locked while the menu is open',
+    afterOpen.bodyOverflow === 'hidden',
+    `document.body.style.overflow = "${afterOpen.bodyOverflow}"`,
+  );
+
+  // Tab well past the end of the panel; focus must never escape it.
+  for (let i = 0; i < 14; i++) await client.press('Tab', 'Tab', 9);
+  const trapped = await client.eval(`(() => {
+    const panel = document.querySelector('[role="dialog"]');
+    return { inside: panel.contains(document.activeElement),
+             text: (document.activeElement.textContent || '').trim().slice(0, 24) };
+  })()`);
+  check(
+    'Focus is trapped: 14 forward Tabs cannot leave the panel',
+    trapped.inside,
+    `focus rests on "${trapped.text}", inside the dialog`,
+  );
+
+  // And backwards.
+  for (let i = 0; i < 6; i++) await client.press('Tab', 'Tab', 9, 8 /* shift */);
+  const trappedBack = await client.eval(`(() => {
+    const panel = document.querySelector('[role="dialog"]');
+    return { inside: panel.contains(document.activeElement) };
+  })()`);
+  check('Focus is trapped going backwards too (6 Shift+Tabs)', trappedBack.inside);
+
+  await client.press('Escape', 'Escape', 27);
+  await wait(450);
+  const afterEscape = await client.eval(`(() => {
+    const panel = document.querySelector('[role="dialog"]');
+    return {
+      inert: panel.hasAttribute('inert'),
+      opacity: getComputedStyle(panel).opacity,
+      focusLabel: document.activeElement.getAttribute('aria-label'),
+      bodyOverflow: document.body.style.overflow,
+      expanded: document.querySelector('[aria-controls]')?.getAttribute('aria-expanded'),
+    };
+  })()`);
+  check(
+    'Escape closes the menu, restores focus to the trigger, and unlocks scrolling',
+    afterEscape.inert &&
+      afterEscape.opacity === '0' &&
+      afterEscape.focusLabel === 'Open menu' &&
+      afterEscape.bodyOverflow !== 'hidden' &&
+      afterEscape.expanded === 'false',
+    `panel inert=${afterEscape.inert} opacity=${afterEscape.opacity}; focus back on "${afterEscape.focusLabel}"; body overflow="${afterEscape.bodyOverflow || '(cleared)'}"`,
+  );
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
 
   // ------------------------------------------------------- HERO VISUAL ----
   console.log('\nHERO VISUAL');
@@ -1030,7 +1088,6 @@ try {
         `(want ${toRgb(colorTokens.primary[opposite])})`,
     );
   }
-
 } finally {
   try {
     client?.ws.close();

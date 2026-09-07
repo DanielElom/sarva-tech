@@ -37,6 +37,7 @@ const FOCUSABLE =
 export function MobileMenu() {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   const panelId = useId();
 
@@ -119,12 +120,21 @@ export function MobileMenu() {
    * `inert` in the same commit. Deferring this to requestAnimationFrame left a
    * window in which any re-render (the header's own scroll listener fires when
    * the body is locked) cancelled the callback and focus was never moved.
+   *
+   * The close button takes focus, not simply the first focusable thing. That
+   * used to be the wordmark, so opening the menu drew an amber focus ring
+   * around the logo, which reads as a glitch rather than as a starting point.
+   * The close button is also the most likely next action.
    */
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open) {
       wasOpen.current = true;
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      // Fall back to the first focusable element if the close button is somehow
+      // not there — focus must always land inside the dialog.
+      const target =
+        closeRef.current ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+      target?.focus();
       return;
     }
     if (wasOpen.current) {
@@ -181,8 +191,13 @@ export function MobileMenu() {
         inert={!open}
         data-state={open ? 'open' : 'closed'}
         className={cn(
-          'sheet fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col md:hidden',
-          'border-line bg-surface-raised shadow-elevated border-l',
+          // Full-screen, not a side sheet. A partial panel left a strip of the
+          // page showing beside it, and because the homepage alternates inverted
+          // and normal surfaces, what appeared in that strip changed from route
+          // to route — a cream band hard against the dark panel edge reads as a
+          // rendering fault rather than a design.
+          'sheet fixed inset-0 z-50 flex w-full flex-col md:hidden',
+          'bg-surface-raised',
         )}
       >
         {hasOpened ? (
@@ -192,6 +207,7 @@ export function MobileMenu() {
               <div className="flex items-center gap-2">
                 <ThemeToggle />
                 <button
+                  ref={closeRef}
                   type="button"
                   onClick={close}
                   aria-label="Close menu"
