@@ -106,6 +106,95 @@ const MUTATIONS = [
     expect: 'Seven tabs, seven panels, exactly one selected and one visible',
   },
   {
+    name: 'Only the open technology panel is rendered',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: '          {CATEGORIES.map((category, index) => {',
+    replace:
+      '          {CATEGORIES.filter((_, i) => i === open).map((category, index) => {',
+    artefact: 'CATEGORIES.filter((_, i) => i === open)',
+    expect: 'Eight categories, eight panels, exactly one open',
+  },
+  {
+    name: 'Technology aria-controls points at nothing',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: '                    aria-controls={panelId(index)}',
+    replace: "                    aria-controls={panelId(index) + '-wrong'}",
+    artefact: "panelId(index) + '-wrong'",
+    expect: 'Each header is a button inside a heading',
+  },
+  {
+    name: 'Closed technology panels are left in the accessibility tree',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: '                  inert={!expanded}',
+    replace: '                  inert={false}',
+    artefact: 'inert={false}',
+    expect: 'All eight descriptions are in the DOM, and the seven closed panels are inert',
+  },
+  {
+    name: 'Technology names given the monospace readout treatment',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: '                      <p className="font-display text-lead tracking-heading">',
+    replace: '                      <p className="readout text-lead">',
+    artefact: '<p className="readout text-lead">',
+    expect: 'Technology names do not use the monospace readout treatment',
+  },
+  {
+    name: 'Arrow keys no longer move between technology headers',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find:
+      "      case 'ArrowDown':\n" +
+      '        event.preventDefault();\n' +
+      '        focusHeader(index + 1);\n' +
+      '        break;',
+    replace: "      case 'ArrowDown':\n        break;",
+    artefact: "case 'ArrowDown':\n        break;",
+    expect: 'ArrowDown moves between headers and Enter opens the focused one',
+  },
+  {
+    name: 'Home and End no longer jump to the first and last category',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find:
+      "      case 'Home':\n" +
+      '        event.preventDefault();\n' +
+      '        focusHeader(0);\n' +
+      '        break;',
+    replace: "      case 'Home':\n        break;",
+    artefact: "case 'Home':\n        break;",
+    expect: 'End and Home reach the last and first categories',
+  },
+  {
+    name: 'Inverted marker dropped from the technology section',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: '      data-surface="inverted"',
+    replace: '      data-x-surface="inverted"',
+    artefact: 'data-x-surface="inverted"',
+    expect: 'The technology section is inverted and reads correctly in the',
+  },
+  {
+    name: 'One principle dropped from the list',
+    file: 'components/sections/why-sarva-tech.tsx',
+    find: '          {PRINCIPLES.map((principle) => (',
+    replace: '          {PRINCIPLES.slice(0, 5).map((principle) => (',
+    artefact: 'PRINCIPLES.slice(0, 5)',
+    expect: 'Six principles, each with its copy in the DOM',
+  },
+  {
+    name: 'Principles rendered as six identical cards',
+    file: 'components/sections/why-sarva-tech.tsx',
+    find: '              className="border-line border-t py-7 first:border-t-0 first:pt-0"',
+    replace: '              className="elevated rounded-md p-7"',
+    artefact: 'className="elevated rounded-md p-7"',
+    expect: 'Principles are not rendered as six identical cards',
+  },
+  {
+    name: 'Principle list given numbered markers',
+    file: 'components/sections/why-sarva-tech.tsx',
+    find: '        <ul className="flex flex-col">',
+    replace: '        <ul className="list-decimal flex flex-col">',
+    artefact: 'list-decimal',
+    expect: 'The principle list carries no numbered markers',
+  },
+  {
     name: 'Panel capped in width again — a strip of the page shows beside it',
     file: 'components/chrome/mobile-menu.tsx',
     find: "          'sheet fixed inset-0 z-50 flex w-full flex-col md:hidden',",
