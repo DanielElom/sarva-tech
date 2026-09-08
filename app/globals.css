@@ -237,6 +237,30 @@
     animation: state-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
   }
 
+  /*
+   * Disclosure panel. Animating to `auto` height is not possible, so the panel
+   * is a grid whose single row goes from 0fr to 1fr — which IS animatable — with
+   * the content clipped by the row.
+   *
+   * A closed panel keeps its content in the document, so a crawler and a reader
+   * without JavaScript both still get it. `inert` on the element is what removes
+   * it from the tab order and the accessibility tree, rather than `display:
+   * none`, which would remove it from the document's rendered content too.
+   */
+  .disclosure-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 260ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .disclosure-panel[data-open] {
+    grid-template-rows: 1fr;
+  }
+
+  .disclosure-panel > * {
+    overflow: hidden;
+  }
+
   /* The single elevation treatment. One, not a ladder. */
   .elevated {
     background-color: var(--color-surface-raised);

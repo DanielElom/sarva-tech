@@ -1,14 +1,19 @@
 import { Hero } from '@/components/sections/hero';
 import { WhatWeDo } from '@/components/sections/what-we-do';
 import { ProblemFirst } from '@/components/sections/problem-first';
+import { WhySarvaTech } from '@/components/sections/why-sarva-tech';
+import { TechnologyEcosystem } from '@/components/sections/technology-ecosystem';
 
 /**
- * Homepage, S2 portion of the narrative (CLAUDE.md 1):
- * problem -> why Sarva Tech exists -> what we solve.
+ * Homepage. CLAUDE.md 1: problem -> why Sarva Tech exists -> what we solve ->
+ * how we solve it -> what we build -> start a project.
  *
- * The services ecosystem, process timeline, technology ecosystem and
- * "Why Sarva Tech" are S3. Each section below is removable by deleting its
- * import, per CLAUDE.md 3.
+ * Surface rhythm across the page is N N I N I I: the two inverted passages are
+ * the problem-first section and the closing pair of technology + footer. See
+ * the S3 report for why the technology section takes the inversion rather than
+ * "Why Sarva Tech".
+ *
+ * Each section is removable by deleting its import, per CLAUDE.md 3.
  */
 export default function HomePage() {
   return (
@@ -16,6 +21,8 @@ export default function HomePage() {
       <Hero />
       <WhatWeDo />
       <ProblemFirst />
+      <WhySarvaTech />
+      <TechnologyEcosystem />
     </>
   );
 }

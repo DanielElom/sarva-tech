@@ -24,17 +24,17 @@ proof → start a project.
 
 ## 2. Stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js, App Router |
-| Language | TypeScript, `strict: true` |
-| Styling | Tailwind CSS, tokens only (see §4) |
-| Motion | Motion (`motion/react`), imported per component |
-| Content | MDX with typed frontmatter schemas |
-| Data | Supabase (form submissions only, no CMS, no auth) |
-| Email | Resend |
-| Hosting | Vercel |
-| Package manager | pnpm |
+| Layer           | Choice                                            |
+| --------------- | ------------------------------------------------- |
+| Framework       | Next.js, App Router                               |
+| Language        | TypeScript, `strict: true`                        |
+| Styling         | Tailwind CSS, tokens only (see §4)                |
+| Motion          | Motion (`motion/react`), imported per component   |
+| Content         | MDX with typed frontmatter schemas                |
+| Data            | Supabase (form submissions only, no CMS, no auth) |
+| Email           | Resend                                            |
+| Hosting         | Vercel                                            |
+| Package manager | pnpm                                              |
 
 No database ORM, no backend service, no auth. Pages are static or ISR. The only server
 code is route handlers under `app/api/`.
@@ -85,11 +85,11 @@ its import without touching anything else.
 The site has a day and a night theme. **Do not think in "dark sections" and "light
 sections."** Surfaces are defined by role and resolve per theme:
 
-| Token | Night | Day |
-|---|---|---|
-| `surface-base` | `#001D13` | `#F5F2EC` |
-| `surface-raised` | `#022C1E` | `#FFFFFF` |
-| `surface-frame` | `#121F1D` | `#E4E0D7` |
+| Token              | Night                    | Day                        |
+| ------------------ | ------------------------ | -------------------------- |
+| `surface-base`     | `#001D13`                | `#F5F2EC`                  |
+| `surface-raised`   | `#022C1E`                | `#FFFFFF`                  |
+| `surface-frame`    | `#121F1D`                | `#E4E0D7`                  |
 | `surface-inverted` | resolves to the day base | resolves to the night base |
 
 `surface-inverted` is how the brief's requested rhythm between dark and light sections
@@ -107,13 +107,13 @@ persisted to `localStorage`. No flash of wrong theme on load.
 
 ### 4.2 Colour
 
-| Token | Night | Day |
-|---|---|---|
-| `text-primary` | `#E8F3EE` | `#08241A` |
-| `text-muted` | `#8BA099` | `#4A5B52` |
-| `accent` (fills) | `#F59B02` | `#F59B02` |
+| Token                                       | Night     | Day       |
+| ------------------------------------------- | --------- | --------- |
+| `text-primary`                              | `#E8F3EE` | `#08241A` |
+| `text-muted`                                | `#8BA099` | `#4A5B52` |
+| `accent` (fills)                            | `#F59B02` | `#F59B02` |
 | `accent-text` (text, icons, borders, focus) | `#F59B02` | `#986001` |
-| `on-accent` (text on an accent fill) | `#0A1410` | `#0A1410` |
+| `on-accent` (text on an accent fill)        | `#0A1410` | `#0A1410` |
 
 These three have no per-theme hex of their own, so they sit outside the table:
 
@@ -154,11 +154,11 @@ Minimums: 4.5:1 body text, 3:1 large text and UI borders, 3:1 focus indicators.
 
 ### 4.5 Type
 
-| Role | Face | Notes |
-|---|---|---|
-| Display and headings | Space Grotesk | Mechanical character, suits the instrument feel |
-| Body | Inter | Holds up at small sizes on mid-range Android |
-| Technical labels | JetBrains Mono | Reserved, see §4.6 |
+| Role                 | Face           | Notes                                           |
+| -------------------- | -------------- | ----------------------------------------------- |
+| Display and headings | Space Grotesk  | Mechanical character, suits the instrument feel |
+| Body                 | Inter          | Holds up at small sizes on mid-range Android    |
+| Technical labels     | JetBrains Mono | Reserved, see §4.6                              |
 
 All three self-hosted via `next/font`. No external font requests, no layout shift.
 
@@ -304,16 +304,25 @@ Footer copyright year is generated at build time, never typed.
 
 ## 12. Sessions
 
-| Session | Scope | Status |
-|---|---|---|
-| S1 | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | complete |
-| S2 | Homepage part 1: hero + interactive visual, what we do, problem-first section | not started |
-| S3 | Homepage part 2: services ecosystem, process timeline, technology ecosystem, why Sarva Tech | not started |
-| S4 | Content layer: MDX schemas, solutions and work listing + detail, four real case studies | not started |
-| S5 | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page | not started |
-| S6 | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch | not started |
+| Session | Scope                                                                                                                    | Status      |
+| ------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| S1      | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy         | complete    |
+| S2      | Homepage part 1: hero + interactive visual, what we do, problem-first section                                            | complete    |
+| S3      | Homepage part 2: why Sarva Tech, technology ecosystem                                                                    | not started |
+| S4      | Content layer: MDX schemas, solutions and work listing + detail, four real case studies, services ecosystem on /services | not started |
+| S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                                      | not started |
+| S6      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                         | not started |
 
-S1 is complete. The conversion footer was built in S1; S3 no longer includes it.
+S1 and S2 are complete. The conversion footer was built in S1, so S3 no longer includes it.
+
+Two things were cut from S3 as repetition rather than content:
+
+- **The process timeline is cut from the homepage.** S2's problem-first section already
+  walks that sequence. A second process section on the same page is the same argument
+  with different stage names.
+- **The services ecosystem moves to `/services`.** S2's "What we do" already introduces
+  those five categories. Two treatments of them on one page is padding, and the detail
+  belongs on the page a reader goes to for it.
 
 A copy pass happens between S1 and S2. Layout follows copy, and inventing placeholder copy
 in S2 means rebuilding sections later when the real words are a different length.

@@ -1078,16 +1078,202 @@ try {
       `The stages section is itself inverted and reads correctly in the ${theme} theme`,
       stageColours.found &&
         stageColours.isInverted &&
-        stageColours.invertedCount === 2 &&
+        stageColours.invertedCount === 3 &&
         stageColours.bg === toRgb(colorTokens['surface-base'][opposite]) &&
         stageColours.tabColour === toRgb(colorTokens.primary[opposite]) &&
         stageColours.panelColour === toRgb(colorTokens.primary[opposite]),
       `section found=${stageColours.found} inverted=${stageColours.isInverted}, ` +
-        `${stageColours.invertedCount} inverted scope(s) on the page (want 2); ` +
+        `${stageColours.invertedCount} inverted scope(s) on the page (want 3); ` +
         `band ${stageColours.bg}, selected tab ${stageColours.tabColour}, panel ${stageColours.panelColour} ` +
         `(want ${toRgb(colorTokens.primary[opposite])})`,
     );
   }
+
+  // ------------------------------------------------ TECHNOLOGY ECOSYSTEM ---
+  console.log('\nTECHNOLOGY ECOSYSTEM');
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/');
+  await wait(400);
+
+  const discloseShape = await client.eval(`(() => {
+    const headers = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.closest('[data-surface="inverted"]') && b.id.includes('-header-'));
+    const panels = [...document.querySelectorAll('[role="region"]')];
+    return {
+      headerCount: headers.length,
+      panelCount: panels.length,
+      expanded: headers.filter(h => h.getAttribute('aria-expanded') === 'true').length,
+      // Collapsed panels stay in the document but must be out of the a11y tree.
+      inertClosed: panels.filter(p => p.hasAttribute('inert')).length,
+      wiring: headers.every(h => {
+        const panel = document.getElementById(h.getAttribute('aria-controls'));
+        return panel && panel.getAttribute('aria-labelledby') === h.id;
+      }),
+      // Every header is its own Tab stop: an accordion has no roving tabindex.
+      allTabbable: headers.every(h => h.tabIndex === 0),
+      inHeadings: headers.every(h => h.parentElement?.tagName === 'H3'),
+      // All eight bodies present regardless of open state.
+      bodiesPresent: panels.filter(p => p.textContent.trim().length > 30).length,
+      // CLAUDE.md 4.6: mono is instrumentation. Technology names are content.
+      readoutInside: document.querySelectorAll('[data-surface="inverted"] [role="region"] .readout').length,
+    };
+  })()`);
+  check(
+    'Eight categories, eight panels, exactly one open',
+    discloseShape.headerCount === 8 &&
+      discloseShape.panelCount === 8 &&
+      discloseShape.expanded === 1,
+    `headers=${discloseShape.headerCount} panels=${discloseShape.panelCount} expanded=${discloseShape.expanded}`,
+  );
+  check(
+    'Each header is a button inside a heading, controlling a panel that names it back',
+    discloseShape.wiring && discloseShape.inHeadings && discloseShape.allTabbable,
+    `aria wiring=${discloseShape.wiring}, headers in <h3>=${discloseShape.inHeadings}, all tabbable=${discloseShape.allTabbable}`,
+  );
+  check(
+    'All eight descriptions are in the DOM, and the seven closed panels are inert',
+    discloseShape.bodiesPresent === 8 && discloseShape.inertClosed === 7,
+    `${discloseShape.bodiesPresent}/8 panels carry their copy; ${discloseShape.inertClosed} of 7 closed panels are inert`,
+  );
+  check(
+    'Technology names do not use the monospace readout treatment (CLAUDE.md 4.6)',
+    discloseShape.readoutInside === 0,
+    `${discloseShape.readoutInside} readout element(s) inside the technology panels`,
+  );
+
+  // Keyboard: reach a header, move with arrows, toggle with the keyboard alone.
+  await client.eval(`(() => {
+    const h = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.id.includes('-header-'));
+    h[0].focus();
+  })()`);
+  await client.press('ArrowDown', 'ArrowDown', 40);
+  await client.press('ArrowDown', 'ArrowDown', 40);
+  const movedTo = await client.eval(`(() => {
+    const h = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.id.includes('-header-'));
+    return h.indexOf(document.activeElement);
+  })()`);
+  await client.press('Enter', 'Enter', 13, 0, '\r');
+  await wait(450);
+  const afterToggle = await client.eval(`(() => {
+    const h = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.id.includes('-header-'));
+    const active = h.indexOf(document.activeElement);
+    const panel = document.getElementById(h[active].getAttribute('aria-controls'));
+    return {
+      active,
+      expanded: h[active].getAttribute('aria-expanded'),
+      openCount: h.filter(x => x.getAttribute('aria-expanded') === 'true').length,
+      panelInert: panel.hasAttribute('inert'),
+      panelHeight: Math.round(panel.getBoundingClientRect().height),
+    };
+  })()`);
+  check(
+    'ArrowDown moves between headers and Enter opens the focused one',
+    movedTo === 2 &&
+      afterToggle.active === 2 &&
+      afterToggle.expanded === 'true' &&
+      !afterToggle.panelInert &&
+      afterToggle.panelHeight > 0,
+    `two ArrowDowns -> header ${movedTo}; Enter -> aria-expanded=${afterToggle.expanded}, ` +
+      `inert=${afterToggle.panelInert}, height=${afterToggle.panelHeight}px, ${afterToggle.openCount} open`,
+  );
+
+  await client.press('End', 'End', 35);
+  const atEndDisclosure = await client.eval(`(() => {
+    const h = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.id.includes('-header-'));
+    return h.indexOf(document.activeElement);
+  })()`);
+  await client.press('Home', 'Home', 36);
+  const atHomeDisclosure = await client.eval(`(() => {
+    const h = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+      .filter(b => b.id.includes('-header-'));
+    return h.indexOf(document.activeElement);
+  })()`);
+  check(
+    'End and Home reach the last and first categories',
+    atEndDisclosure === 7 && atHomeDisclosure === 0,
+    `End -> ${atEndDisclosure}, Home -> ${atHomeDisclosure}`,
+  );
+
+  // The section is inverted: check its colours resolve against the opposite theme.
+  for (const theme of ['night', 'day']) {
+    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+    await client.goto(ORIGIN + '/');
+    await wait(300);
+    const opposite = theme === 'night' ? 'day' : 'night';
+    const techColours = await client.eval(`(() => {
+      const header = [...document.querySelectorAll('[aria-expanded][aria-controls]')]
+        .find(b => b.id.includes('-header-'));
+      const section = header ? header.closest('section') : null;
+      const openPanel = section ? section.querySelector('[role="region"]:not([inert]) p') : null;
+      return {
+        found: !!section,
+        isInverted: section ? section.getAttribute('data-surface') === 'inverted' : false,
+        invertedCount: document.querySelectorAll('[data-surface="inverted"]').length,
+        bg: section ? getComputedStyle(section).backgroundColor : null,
+        headerColour: header ? getComputedStyle(header).color : null,
+        toolsColour: openPanel ? getComputedStyle(openPanel).color : null,
+      };
+    })()`);
+    check(
+      `The technology section is inverted and reads correctly in the ${theme} theme`,
+      techColours.found &&
+        techColours.isInverted &&
+        techColours.invertedCount === 3 &&
+        techColours.bg === toRgb(colorTokens['surface-base'][opposite]) &&
+        techColours.headerColour === toRgb(colorTokens.primary[opposite]) &&
+        techColours.toolsColour === toRgb(colorTokens.primary[opposite]),
+      `inverted=${techColours.isInverted}, ${techColours.invertedCount} scope(s) on the page (want 3); ` +
+        `band ${techColours.bg}, open header ${techColours.headerColour}, tools ${techColours.toolsColour} ` +
+        `(want ${toRgb(colorTokens.primary[opposite])})`,
+    );
+  }
+
+  // ------------------------------------------------------ WHY SARVA TECH ---
+  console.log('\nWHY SARVA TECH');
+  const principles = await client.eval(`(() => {
+    const heading = document.getElementById('why-sarva-tech-heading');
+    const section = heading ? heading.closest('section') : null;
+    const items = section ? [...section.querySelectorAll('li')] : [];
+    const radii = new Set(items.map(i => getComputedStyle(i).borderRadius));
+    const shadows = new Set(items.map(i => getComputedStyle(i).boxShadow));
+    const backgrounds = new Set(items.map(i => getComputedStyle(i).backgroundColor));
+    return {
+      found: !!section,
+      count: items.length,
+      withBody: items.filter(i => i.textContent.trim().length > 40).length,
+      // A card treatment would give every item a radius, a fill and a shadow.
+      radii: [...radii],
+      shadows: [...shadows],
+      backgrounds: [...backgrounds],
+      // A principle list must not be numbered — that would imply a sequence.
+      listStyle: section ? getComputedStyle(section.querySelector('ul')).listStyleType : null,
+      inverted: section ? section.hasAttribute('data-surface') : null,
+    };
+  })()`);
+  check(
+    'Six principles, each with its copy in the DOM',
+    principles.found && principles.count === 6 && principles.withBody === 6,
+    `${principles.count} items, ${principles.withBody} with body copy`,
+  );
+  check(
+    'Principles are not rendered as six identical cards',
+    principles.radii.every((r) => r === '0px') &&
+      principles.shadows.every((b) => b === 'none') &&
+      principles.backgrounds.every((c) => c === 'rgba(0, 0, 0, 0)'),
+    `border-radius ${JSON.stringify(principles.radii)}, box-shadow ${JSON.stringify(principles.shadows)}, ` +
+      `background ${JSON.stringify(principles.backgrounds)}`,
+  );
+  check(
+    'The principle list carries no numbered markers',
+    principles.listStyle === 'none' && principles.inverted === false,
+    `list-style-type=${principles.listStyle}, on an inverted surface=${principles.inverted}`,
+  );
 } finally {
   try {
     client?.ws.close();
