@@ -261,6 +261,46 @@
     overflow: hidden;
   }
 
+  /*
+   * Ecosystem map nodes. The whole <a> is the target, so the hit area is the
+   * circle rather than just the label, and focus is visible on the shape.
+   */
+  .services-node circle {
+    transition:
+      fill 150ms ease-out,
+      stroke 150ms ease-out;
+  }
+
+  .services-node:hover circle,
+  .services-node:focus-visible circle {
+    fill: var(--color-accent);
+    stroke: var(--color-accent-text);
+  }
+
+  .services-node:hover text,
+  .services-node:focus-visible text {
+    fill: var(--color-on-accent);
+  }
+
+  .services-node:focus-visible {
+    outline: 2px solid var(--color-accent-text);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /*
+   * The category the ecosystem map sent the reader to.
+   *
+   * The marker is the heading colour, not a border. It was originally the top
+   * border, which was invisible on the first category — that one has no top
+   * border by design — so the most likely first click gave no feedback at all.
+   * Colouring the heading works for all five, costs no layout, and uses
+   * accent-text, which is the token for text in both themes.
+   */
+  .service-entry:target h3 {
+    color: var(--color-accent-text);
+  }
+
   /* The single elevation treatment. One, not a ladder. */
   .elevated {
     background-color: var(--color-surface-raised);

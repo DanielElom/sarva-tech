@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Container } from '@/components/ui/container';
 import { ButtonLink } from '@/components/ui/button';
-import { Readout } from '@/components/ui/readout';
 import { StatusLine } from '@/components/ui/status-line';
 import { Logo } from './logo';
 import { CONTACT, FOOTER_COLUMNS, LEGAL_LINKS, PRIMARY_CTA, SITE } from '@/lib/site';
@@ -14,6 +13,12 @@ import { CONTACT, FOOTER_COLUMNS, LEGAL_LINKS, PRIMARY_CTA, SITE } from '@/lib/s
  * themes rather than only in one (CLAUDE.md 4.1).
  *
  * The legal strip below is thin and quiet.
+ *
+ * The column headings are set in the display face, not the readout treatment.
+ * CLAUDE.md 4.6 reserves monospace and tracked caps for instrumentation and says
+ * plainly that it does not appear on navigation — and these label navigation
+ * groups. They keep their rank over the links below through size, weight and
+ * colour instead.
  *
  * CLAUDE.md 11: WhatsApp only. There are no social accounts, so there are no
  * social icons. There is no address, so none is invented. The copyright year is
@@ -49,7 +54,9 @@ export function Footer() {
           <div className="grid grid-cols-2 gap-x-8 gap-y-10 pt-12 md:grid-cols-5">
             {FOOTER_COLUMNS.map((column) => (
               <nav key={column.heading} aria-label={column.heading}>
-                <Readout className="text-muted">{column.heading}</Readout>
+                <p className="font-display text-primary text-sm font-medium">
+                  {column.heading}
+                </p>
                 <ul className="mt-4 flex flex-col gap-2.5">
                   {column.links.map((link) => (
                     <li key={`${column.heading}-${link.href}-${link.label}`}>
@@ -67,7 +74,7 @@ export function Footer() {
             ))}
 
             <div>
-              <Readout className="text-muted">Contact</Readout>
+              <p className="font-display text-primary text-sm font-medium">Contact</p>
               <ul className="mt-4 flex flex-col gap-2.5">
                 <li>
                   <a

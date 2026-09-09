@@ -1274,6 +1274,222 @@ try {
     principles.listStyle === 'none' && principles.inverted === false,
     `list-style-type=${principles.listStyle}, on an inverted surface=${principles.inverted}`,
   );
+
+  // ------------------------------------------------------------ SERVICES --
+  console.log('\nSERVICES');
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/services');
+  await wait(400);
+
+  const servicesShape = await client.eval(`(() => {
+    const entries = [...document.querySelectorAll('.service-entry')];
+    const nodes = [...document.querySelectorAll('.services-node')];
+    const ids = entries.map(e => e.id);
+    return {
+      entryCount: entries.length,
+      nodeCount: nodes.length,
+      // Every map node must point at a section that exists on this page.
+      nodesResolve: nodes.every(n => {
+        const href = n.getAttribute('href') || '';
+        return href.startsWith('#') && ids.includes(href.slice(1));
+      }),
+      nodesNamed: nodes.every(n => (n.getAttribute('aria-label') || '').length > 4),
+      // Four fields per category, present regardless of any selection state.
+      fieldCount: document.querySelectorAll('.service-entry dt').length,
+      valueCount: document.querySelectorAll('.service-entry dd').length,
+      // Nothing is hidden: this page answers questions, it does not gate them.
+      allVisible: entries.every(e => {
+        const cs = getComputedStyle(e);
+        return cs.display !== 'none' && cs.visibility !== 'hidden';
+      }),
+      // CLAUDE.md 4.6: technology names are content, not instrumentation.
+      readoutInEntries: document.querySelectorAll('.service-entry .readout').length,
+      invertedCount: document.querySelectorAll('[data-surface="inverted"]').length,
+      h1: document.querySelectorAll('h1').length,
+    };
+  })()`);
+  check(
+    'Five categories, each with all four fields, none hidden behind a selector',
+    servicesShape.entryCount === 5 &&
+      servicesShape.fieldCount === 20 &&
+      servicesShape.valueCount === 20 &&
+      servicesShape.allVisible,
+    `${servicesShape.entryCount} entries, ${servicesShape.fieldCount} field labels, ` +
+      `${servicesShape.valueCount} values, all visible=${servicesShape.allVisible}`,
+  );
+  check(
+    'The ecosystem map has five nodes, each resolving to a section on the page',
+    servicesShape.nodeCount === 5 && servicesShape.nodesResolve && servicesShape.nodesNamed,
+    `${servicesShape.nodeCount} nodes, all hrefs resolve=${servicesShape.nodesResolve}, all named=${servicesShape.nodesNamed}`,
+  );
+  check(
+    'No readout treatment inside the service entries (CLAUDE.md 4.6)',
+    servicesShape.readoutInEntries === 0,
+    `${servicesShape.readoutInEntries} readout element(s) inside the categories`,
+  );
+  check(
+    '/services has exactly one h1 and two inverted scopes',
+    servicesShape.h1 === 1 && servicesShape.invertedCount === 2,
+    `h1=${servicesShape.h1}, inverted scopes=${servicesShape.invertedCount} (want 2)`,
+  );
+
+  // Keyboard: reach a map node and activate it; the target must be marked.
+  const mapKeyboard = await client.eval(`(() => {
+    const node = document.querySelector('.services-node');
+    node.focus();
+    return {
+      focused: document.activeElement === node,
+      href: node.getAttribute('href'),
+      outline: getComputedStyle(node).outlineColor,
+    };
+  })()`);
+  await client.press('Enter', 'Enter', 13, 0, '\r');
+  await wait(500);
+  const afterJump = await client.eval(`(() => {
+    const targeted = document.querySelector('.service-entry:target');
+    const heading = targeted ? targeted.querySelector('h3') : null;
+    return {
+      hash: location.hash,
+      targetedId: targeted ? targeted.id : null,
+      // Read the theme in effect rather than assuming one.
+      theme: document.documentElement.getAttribute('data-theme'),
+      markerColour: heading ? getComputedStyle(heading).color : null,
+      // The first category has no top border, so the marker must not be one.
+      isFirst: targeted ? targeted === document.querySelector('.service-entry') : false,
+    };
+  })()`);
+  const wantMarker = toRgb(colorTokens['accent-text'][afterJump.theme ?? 'night']);
+  check(
+    'A map node is keyboard focusable and activating it visibly selects its category',
+    mapKeyboard.focused &&
+      afterJump.hash === mapKeyboard.href &&
+      afterJump.targetedId === mapKeyboard.href.slice(1) &&
+      afterJump.markerColour === wantMarker,
+    `focus ok; Enter -> ${afterJump.hash}, :target = ${afterJump.targetedId}` +
+      `${afterJump.isFirst ? ' (the first category, which has no top border)' : ''}, ` +
+      `marked ${afterJump.markerColour} (${afterJump.theme} accent-text=${wantMarker})`,
+  );
+
+  // Touch: the radial layout is replaced, not shrunk.
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 2,
+    mobile: true,
+  });
+  await client.goto(ORIGIN + '/services');
+  await wait(400);
+  const servicesTouch = await client.eval(`(() => {
+    const svgWrap = document.querySelector('.services-node')?.closest('div');
+    const links = [...document.querySelectorAll('a[href^="#"]')].filter(a =>
+      a.closest('ul') && /product-development|technology-talent/.test(a.getAttribute('href')));
+    const heights = links.map(a => Math.round(a.getBoundingClientRect().height));
+    return {
+      diagramShown: svgWrap ? getComputedStyle(svgWrap).display !== 'none' : false,
+      touchLinks: [...document.querySelectorAll('ul a[href^="#"]')].filter(a =>
+        a.getBoundingClientRect().width > 0).length,
+      minHeight: heights.length ? Math.min(...heights) : 0,
+    };
+  })()`);
+  check(
+    'Below the desktop breakpoint the radial diagram is replaced by full-size touch targets',
+    !servicesTouch.diagramShown &&
+      servicesTouch.touchLinks === 5 &&
+      servicesTouch.minHeight >= 44,
+    `radial diagram shown=${servicesTouch.diagramShown}, ${servicesTouch.touchLinks} touch links, ` +
+      `smallest ${servicesTouch.minHeight}px tall (want >= 44)`,
+  );
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
+
+  // Both themes on /services, identity and count.
+  for (const theme of ['night', 'day']) {
+    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+    await client.goto(ORIGIN + '/services');
+    await wait(300);
+    const opposite = theme === 'night' ? 'day' : 'night';
+    const svcTheme = await client.eval(`(() => {
+      const heading = document.getElementById('services-map-heading');
+      const map = heading ? heading.closest('section') : null;
+      const entry = document.querySelector('.service-entry h3');
+      return {
+        mapFound: !!map,
+        mapInverted: map ? map.getAttribute('data-surface') === 'inverted' : false,
+        invertedCount: document.querySelectorAll('[data-surface="inverted"]').length,
+        mapBg: map ? getComputedStyle(map).backgroundColor : null,
+        pageBg: getComputedStyle(document.body).backgroundColor,
+        entryHeading: entry ? getComputedStyle(entry).color : null,
+      };
+    })()`);
+    check(
+      `/services reads correctly in the ${theme} theme, map inverted, rest not`,
+      svcTheme.mapFound &&
+        svcTheme.mapInverted &&
+        svcTheme.invertedCount === 2 &&
+        svcTheme.mapBg === toRgb(colorTokens['surface-base'][opposite]) &&
+        svcTheme.pageBg === toRgb(colorTokens['surface-base'][theme]) &&
+        svcTheme.entryHeading === toRgb(colorTokens.primary[theme]),
+      `map inverted=${svcTheme.mapInverted}, ${svcTheme.invertedCount} scope(s) (want 2); ` +
+        `map ${svcTheme.mapBg}, page ${svcTheme.pageBg}, category heading ${svcTheme.entryHeading}`,
+    );
+  }
+
+  // The page's conversion block must not duplicate the footer's.
+  await client.goto(ORIGIN + '/services');
+  await wait(300);
+  const conversion = await client.eval(`(() => {
+    const headings = [...document.querySelectorAll('h2, h3')].map(h => h.textContent.trim());
+    const pageBlock = headings.find(h => /Not sure which of these/.test(h));
+    const footerBlock = headings.find(h => /Have a problem worth solving/.test(h));
+    const inFooter = [...document.querySelectorAll('footer h2')].map(h => h.textContent.trim());
+    return {
+      pageBlock: pageBlock || null,
+      footerBlock: footerBlock || null,
+      distinct: pageBlock !== footerBlock,
+      footerOnly: inFooter.some(h => /Have a problem worth solving/.test(h)),
+    };
+  })()`);
+  check(
+    "The page's conversion block does not repeat the footer's",
+    !!conversion.pageBlock &&
+      !!conversion.footerBlock &&
+      conversion.distinct &&
+      conversion.footerOnly,
+    `page asks "${conversion.pageBlock}", footer asks "${conversion.footerBlock}"`,
+  );
+
+  // ------------------------------------------------------- FOOTER LABELS --
+  console.log('\nFOOTER');
+  const footerLabels = await client.eval(`(() => {
+    const footer = document.querySelector('footer');
+    const readouts = [...footer.querySelectorAll('.readout')];
+    const navs = [...footer.querySelectorAll('nav[aria-label]')];
+    return {
+      // The status line is the one legitimate readout in the footer.
+      readoutTexts: readouts.map(r => r.textContent.trim().slice(0, 24)),
+      readoutsInNav: readouts.filter(r => r.closest('nav')).length,
+      navCount: navs.length,
+      headingFont: navs.length
+        ? getComputedStyle(navs[0].querySelector('p')).fontFamily.split(',')[0].trim()
+        : null,
+    };
+  })()`);
+  check(
+    'Footer navigation group labels do not use the readout treatment (CLAUDE.md 4.6)',
+    footerLabels.readoutsInNav === 0 && !/mono/i.test(footerLabels.headingFont || ''),
+    `${footerLabels.readoutsInNav} readout element(s) inside footer navs; ` +
+      `group label font is ${footerLabels.headingFont}; ` +
+      `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
+  );
 } finally {
   try {
     client?.ws.close();
