@@ -283,6 +283,22 @@ const MUTATIONS = [
   },
 ];
 
+/**
+ * MUTATION_ONLY re-runs a subset by name substring. A run that ends
+ * inconclusive — the suite hit its ceiling on a loaded machine — needs
+ * repeating on its own, not the whole set again.
+ */
+const only = process.env.MUTATION_ONLY;
+const SELECTED = only
+  ? MUTATIONS.filter((m) => m.name.toLowerCase().includes(only.toLowerCase()))
+  : MUTATIONS;
+if (only && SELECTED.length === 0) {
+  console.error(`\n  No mutation matches ${JSON.stringify(only)}.\n`);
+  process.exit(2);
+}
+
+// Snapshot and integrity checks still cover every target, not just the subset,
+// so a filtered run cannot leave an unrelated file mutated.
 const TARGETS = [...new Set(MUTATIONS.map((m) => m.file))];
 const snapshotPath = (file) => join(SNAPSHOT_DIR, file.replaceAll('/', '__'));
 
@@ -476,7 +492,7 @@ const results = [];
 console.log('\nMUTATION TESTING — each check run against the defect it exists to catch\n');
 
 try {
-  for (const mutation of MUTATIONS) {
+  for (const mutation of SELECTED) {
     apply(mutation);
     const { buildFailed, timedOut, output } = await runSuite();
 
