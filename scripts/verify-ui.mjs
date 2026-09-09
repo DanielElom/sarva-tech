@@ -1469,26 +1469,45 @@ try {
 
   // ------------------------------------------------------- FOOTER LABELS --
   console.log('\nFOOTER');
+  /*
+   * Every read here is defensive. An earlier version called
+   * getComputedStyle(nav.querySelector('p')) directly, and when a mutation
+   * replaced that <p> the call threw — so the suite died mid-run and reported
+   * NO failures at all, which reads exactly like "nothing wrong". A check that
+   * throws is worse than one that fails.
+   */
   const footerLabels = await client.eval(`(() => {
     const footer = document.querySelector('footer');
+    if (!footer) return { missing: true };
     const readouts = [...footer.querySelectorAll('.readout')];
     const navs = [...footer.querySelectorAll('nav[aria-label]')];
+    // The group label is whatever element holds the visible heading text,
+    // rather than a <p> we assume is there.
+    const label = navs[0] ? navs[0].firstElementChild : null;
     return {
-      // The status line is the one legitimate readout in the footer.
+      missing: false,
       readoutTexts: readouts.map(r => r.textContent.trim().slice(0, 24)),
       readoutsInNav: readouts.filter(r => r.closest('nav')).length,
       navCount: navs.length,
-      headingFont: navs.length
-        ? getComputedStyle(navs[0].querySelector('p')).fontFamily.split(',')[0].trim()
+      labelTag: label ? label.tagName : null,
+      labelIsReadout: label ? label.classList.contains('readout') : null,
+      headingFont: label
+        ? getComputedStyle(label).fontFamily.split(',')[0].trim()
         : null,
     };
   })()`);
   check(
     'Footer navigation group labels do not use the readout treatment (CLAUDE.md 4.6)',
-    footerLabels.readoutsInNav === 0 && !/mono/i.test(footerLabels.headingFont || ''),
-    `${footerLabels.readoutsInNav} readout element(s) inside footer navs; ` +
-      `group label font is ${footerLabels.headingFont}; ` +
-      `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
+    !footerLabels.missing &&
+      footerLabels.navCount > 0 &&
+      footerLabels.readoutsInNav === 0 &&
+      footerLabels.labelIsReadout === false &&
+      !/mono/i.test(footerLabels.headingFont || 'missing'),
+    footerLabels.missing
+      ? 'no footer found'
+      : `${footerLabels.navCount} nav group(s), ${footerLabels.readoutsInNav} readout element(s) inside them; ` +
+        `label is <${footerLabels.labelTag}> in ${footerLabels.headingFont}, readout=${footerLabels.labelIsReadout}; ` +
+        `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
   );
 } finally {
   try {
