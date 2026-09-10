@@ -254,6 +254,70 @@ const MUTATIONS = [
     expect: 'Footer navigation group labels do not use the readout treatment',
   },
   {
+    name: 'Honeypot field name echoed back to the sender',
+    file: 'app/api/intake/route.ts',
+    find: '    if (!key || key === HONEYPOT_FIELD) continue;',
+    replace: '    if (!key) continue;',
+    artefact: 'if (!key) continue;',
+    expect: 'The honeypot rejection does not name the honeypot field',
+    api: true,
+  },
+  {
+    name: 'Rate limiting removed from the submissions endpoint',
+    file: 'app/api/intake/route.ts',
+    find: '  const limit = checkRateLimit(clientKey(request.headers));',
+    replace:
+      '  const limit = { allowed: true, remaining: 99, retryAfter: 0 };\n  void checkRateLimit;\n  void clientKey;',
+    artefact: 'const limit = { allowed: true, remaining: 99, retryAfter: 0 };',
+    expect: 'A burst from one address is rate limited',
+    api: true,
+  },
+  {
+    name: 'Email failure is allowed to fail the whole submission',
+    file: 'app/api/intake/route.ts',
+    find: '  const notified = await notifySubmission(submission, data.id);',
+    replace:
+      '  const notified = await notifySubmission(submission, data.id);\n' +
+      "  if (!notified.sent) return NextResponse.json({ ok: false, error: 'mail failed' }, { status: 502 });",
+    artefact: "error: 'mail failed'",
+    expect: 'A lead survives a broken Resend key',
+    api: true,
+    requiresSupabase: true,
+  },
+  {
+    name: 'Step 5 contact details written to browser storage',
+    file: 'components/sections/intake-flow.tsx',
+    find: '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));',
+    replace:
+      '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, ...details }));',
+    artefact: 'JSON.stringify({ ...draft, ...details })',
+    expect: 'Step 5 contact details are NOT persisted to browser storage',
+  },
+  {
+    name: 'Draft persistence clobbers the saved answers on mount again',
+    file: 'components/sections/intake-flow.tsx',
+    find: '    if (!hydrated || status.state === \'sent\') return;',
+    replace: "    if (status.state === 'sent') return;",
+    artefact: "    if (status.state === 'sent') return;\n    try {\n      sessionStorage.setItem",
+    expect: 'A refresh mid-flow restores the earlier answers',
+  },
+  {
+    name: 'Honeypot given a real tab stop',
+    file: 'components/sections/intake-flow.tsx',
+    find: '              tabIndex={-1}\n              autoComplete="off"',
+    replace: '              autoComplete="off"',
+    artefact: null,
+    expect: 'The honeypot exists but is out of the tab order',
+  },
+  {
+    name: 'WhatsApp demoted below the contact form',
+    file: 'app/(site)/contact/page.tsx',
+    find: '      <section data-surface="inverted" aria-labelledby="contact-direct-heading">',
+    replace: '      <section id="moved" aria-labelledby="contact-direct-heading">',
+    artefact: '<section id="moved"',
+    expect: 'WhatsApp is surfaced before the form, in its own inverted band',
+  },
+  {
     name: 'Panel capped in width again — a strip of the page shows beside it',
     file: 'components/chrome/mobile-menu.tsx',
     find: "          'sheet fixed inset-0 z-50 flex w-full flex-col md:hidden',",
@@ -459,17 +523,27 @@ async function runSuite() {
      * forever; one hung run must not consume the whole session. Exceeding this
      * is reported as inconclusive, never as a pass.
      */
-    const suite = spawnSync('node', [join(root, 'scripts/verify-ui.mjs'), ORIGIN], {
-      cwd: root,
-      encoding: 'utf-8',
-      env: { ...process.env, SARVA_SCOPE: 'home' },
-      timeout: 8 * 60 * 1000,
-      killSignal: 'SIGKILL',
-    });
-    if (suite.error?.code === 'ETIMEDOUT' || suite.signal === 'SIGKILL') {
-      return { timedOut: true, buildFailed: false, output: `${suite.stdout ?? ''}${suite.stderr ?? ''}` };
+    /*
+     * Both suites run: the browser assertions and the API contract. A mutation
+     * to the route handler has nothing to trip in verify-ui, and one to the
+     * flow has nothing to trip in the API contract, so a harness that ran only
+     * one of them would report half its defects as undetected.
+     */
+    let output = '';
+    let timedOut = false;
+    for (const script of ['scripts/verify-ui.mjs', 'scripts/verify-intake-api.mjs']) {
+      const suite = spawnSync('node', [join(root, script), ORIGIN], {
+        cwd: root,
+        encoding: 'utf-8',
+        env: { ...process.env, SARVA_SCOPE: 'home' },
+        timeout: 8 * 60 * 1000,
+        killSignal: 'SIGKILL',
+      });
+      output += `${suite.stdout ?? ''}${suite.stderr ?? ''}`;
+      if (suite.error?.code === 'ETIMEDOUT' || suite.signal === 'SIGKILL') timedOut = true;
     }
-    return { buildFailed: false, output: `${suite.stdout ?? ''}${suite.stderr ?? ''}` };
+    if (timedOut) return { timedOut: true, buildFailed: false, output };
+    return { buildFailed: false, output };
   } finally {
     try {
       process.kill(-server.pid, 'SIGKILL');
@@ -492,7 +566,18 @@ const results = [];
 console.log('\nMUTATION TESTING — each check run against the defect it exists to catch\n');
 
 try {
+  const hasCredentials = existsSync(join(root, '.env.local'));
   for (const mutation of SELECTED) {
+    if (mutation.requiresSupabase && !hasCredentials) {
+      results.push({
+        mutation,
+        caught: false,
+        skipped: true,
+        failures: ['(needs .env.local — not exercised)'],
+      });
+      console.log(`  SKIP  ${mutation.name}\n          needs real Supabase credentials; not exercised`);
+      continue;
+    }
     apply(mutation);
     const { buildFailed, timedOut, output } = await runSuite();
 
@@ -513,7 +598,7 @@ try {
     const failures = failedChecks(output);
     const caught = failures.some((name) => name.includes(mutation.expect));
     if (!caught) undetected++;
-    results.push({ mutation, caught, failures });
+    results.push({ mutation, caught, failures, skipped: false });
 
     console.log(`  ${caught ? 'ok  ' : 'FAIL'}  ${mutation.name}`);
     console.log(
@@ -564,8 +649,8 @@ if (dirty === 0) rmSync(SNAPSHOT_DIR, { recursive: true, force: true });
 else console.log(`\n  Snapshot kept at ${basename(SNAPSHOT_DIR)}/ for recovery.`);
 
 console.log('\nSUMMARY');
-for (const { mutation, caught, failures } of results) {
-  console.log(`  ${caught ? 'caught  ' : 'MISSED  '}${mutation.name}`);
+for (const { mutation, caught, failures, skipped } of results) {
+  console.log(`  ${skipped ? 'skipped ' : caught ? 'caught  ' : 'MISSED  '}${mutation.name}`);
   if (!caught) console.log(`            failing instead: ${failures.join(' | ') || 'nothing'}`);
 }
 console.log(
