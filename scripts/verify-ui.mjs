@@ -147,6 +147,19 @@ class CDP {
   }
 }
 
+/*
+ * These assert the RELATIONSHIP between the endpoint and the readout, not a
+ * particular state. They hard-coded the degraded wording, which was fine while
+ * Supabase was unconfigured and became a false failure the moment it started
+ * working. A check that only passes while something is broken is not checking
+ * the thing it claims to.
+ */
+const EXPECTED_STATUS_LABEL = {
+  ok: 'systems nominal',
+  degraded: 'partial service',
+  down: 'service down',
+};
+
 /** #RRGGBB -> "rgb(r, g, b)" as getComputedStyle reports it. */
 function toRgb(hex) {
   const v = hex.replace('#', '');
@@ -436,16 +449,22 @@ try {
     const health = await (await fetch(ORIGIN + '/api/health')).json();
     check(
       'Status line reflects the real /api/health response, not a hardcoded string',
-      status.text.toLowerCase().includes('partial service') &&
-        status.text.includes('supabase: not_configured') &&
-        health.status === 'degraded' &&
-        health.checks.supabase.status === 'not_configured',
-      `endpoint says status=${health.status}, supabase=${health.checks.supabase.status}; UI renders "${status.text}"`,
+      status.text.toLowerCase().includes(EXPECTED_STATUS_LABEL[health.status]) &&
+        Object.entries(health.checks).every(([name, c]) =>
+          status.text.includes(`${name}: ${c.status}`),
+        ),
+      `endpoint derived "${health.status}" from ` +
+        Object.entries(health.checks)
+          .map(([n, c]) => `${n}=${c.status}`)
+          .join(', ') +
+        `; UI renders "${status.text}"`,
     );
     check(
-      'Status line never claims "Systems Nominal" while a check is not ok',
-      !status.text.toLowerCase().includes('systems nominal'),
-      `rendered text: "${status.text}"`,
+      'Status line claims "Systems Nominal" only when every check is ok',
+      status.text.toLowerCase().includes('systems nominal') ===
+        Object.values(health.checks).every((c) => c.status === 'ok'),
+      `every check ok=${Object.values(health.checks).every((c) => c.status === 'ok')}; ` +
+        `rendered "${status.text}"`,
     );
 
     // Failure state: point the component at an endpoint that is not there.
