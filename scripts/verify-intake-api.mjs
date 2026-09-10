@@ -7,7 +7,15 @@
  * credentials and is exercised separately.
  *
  * Usage: node scripts/verify-intake-api.mjs http://localhost:3210
+ *
+ * IMPORTANT: once Supabase is configured, the valid submissions below write real
+ * rows. This suite therefore marks everything it sends with a reserved address
+ * and deletes those rows afterwards. It does not, because it must not, delete
+ * anything that is not its own — the filter is the marker domain and nothing
+ * else. Before this existed, running the mutation harness left 505 test rows in
+ * the table.
  */
+const MARKER_DOMAIN = 'verify.invalid';
 const ORIGIN = process.argv[2] ?? 'http://localhost:3210';
 
 let failures = 0;
@@ -27,8 +35,8 @@ function post(body, ip) {
 
 const validContact = {
   kind: 'contact',
-  name: 'Ada Lovelace',
-  email: 'ada@example.com',
+  name: 'Contract Probe',
+  email: `probe@${MARKER_DOMAIN}`,
   phone: '',
   organization: '',
   message: 'We take orders on WhatsApp and copy them into a spreadsheet by hand.',
@@ -142,6 +150,40 @@ if (process.env.SARVA_MAIL_BROKEN === '1') {
     res.status === 201 && body.ok === true && !!body.id,
     `HTTP ${res.status} — ${JSON.stringify(body).slice(0, 120)}`,
   );
+}
+
+// -- Clean up after ourselves -------------------------------------------------
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const envPath = new URL('../.env.local', import.meta.url);
+  if (existsSync(envPath)) {
+    const env = Object.fromEntries(
+      readFileSync(envPath, 'utf-8')
+        .split('\n')
+        .filter((l) => l.trim() && !l.trim().startsWith('#'))
+        .map((l) => {
+          const i = l.indexOf('=');
+          return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')];
+        }),
+    );
+    const url = env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (url && key) {
+      const res = await fetch(
+        `${url}/rest/v1/submissions?email=like.*@${MARKER_DOMAIN}`,
+        {
+          method: 'DELETE',
+          headers: {
+            apikey: key,
+            authorization: `Bearer ${key}`,
+            prefer: 'return=representation',
+          },
+        },
+      );
+      const removed = res.ok ? ((await res.json()) ?? []).length : '?';
+      console.log(`\n  cleaned up ${removed} row(s) written by this suite`);
+    }
+  }
 }
 
 console.log(`\n  ${failures === 0 ? 'API contract holds.' : `${failures} FAILURE(S)`}\n`);
