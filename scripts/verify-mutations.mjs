@@ -257,8 +257,8 @@ const MUTATIONS = [
     name: 'Honeypot field name echoed back to the sender',
     file: 'app/api/intake/route.ts',
     find: '    if (!key || key === HONEYPOT_FIELD) continue;',
-    replace: '    if (!key) continue;',
-    artefact: 'if (!key) continue;',
+    replace: '    void HONEYPOT_FIELD;\n    if (!key) continue;',
+    artefact: 'void HONEYPOT_FIELD;',
     expect: 'The honeypot rejection does not name the honeypot field',
     api: true,
   },
@@ -287,9 +287,18 @@ const MUTATIONS = [
   {
     name: 'Step 5 contact details written to browser storage',
     file: 'components/sections/intake-flow.tsx',
-    find: '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));',
+    find:
+      '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));\n' +
+      '    } catch {\n' +
+      '      // Private mode. The flow still works, it just will not survive a refresh.\n' +
+      '    }\n' +
+      '  }, [draft, hydrated, status.state]);',
     replace:
-      '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, ...details }));',
+      '      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, ...details }));\n' +
+      '    } catch {\n' +
+      '      // Private mode. The flow still works, it just will not survive a refresh.\n' +
+      '    }\n' +
+      '  }, [draft, details, hydrated, status.state]);',
     artefact: 'JSON.stringify({ ...draft, ...details })',
     expect: 'Step 5 contact details are NOT persisted to browser storage',
   },
