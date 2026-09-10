@@ -31,6 +31,7 @@ proof → start a project.
 | Styling         | Tailwind CSS, tokens only (see §4)                |
 | Motion          | Motion (`motion/react`), imported per component   |
 | Content         | MDX with typed frontmatter schemas                |
+| Validation      | `zod/mini`, never the full `zod` build            |
 | Data            | Supabase (form submissions only, no CMS, no auth) |
 | Email           | Resend                                            |
 | Hosting         | Vercel                                            |
@@ -38,6 +39,11 @@ proof → start a project.
 
 No database ORM, no backend service, no auth. Pages are static or ISR. The only server
 code is route handlers under `app/api/`.
+
+**Validation is `zod/mini`, not the full `zod` build.** Same library, same checks, same
+messages — a tree-shakeable API rather than a chained one. The full build puts 90KB
+gzipped into any route that imports it, which broke the §6 budget by 37% the one time it
+was used. Compose the field rules once and share them between client and server.
 
 **Not in scope, ever, unless a future session says otherwise:** client dashboard,
 authentication, project tracking, marketplace, e-commerce. Do not add abstraction layers
@@ -221,6 +227,10 @@ Checked at the end of **every** session, not once at launch:
   Baseline after S1: 182.8KB.
 - Deferred post-paint chunks: ≤50KB gzipped per route, loaded on idle or
   intersection, never blocking LCP. Counted separately from the initial payload.
+- Validation schemas load on demand, not at first paint, and count against the
+  deferred budget. Nothing is validated before a step or form is submitted, so
+  loading validators eagerly buys nothing and costs the whole payload. Any future
+  schema work — including MDX frontmatter in S6 — follows this pattern.
 - Images via `next/image`, explicit dimensions, modern formats
 - Below-fold heavy components dynamically imported
 
@@ -352,6 +362,9 @@ assumptions, and confirmation of readiness for the next session without starting
 - [ ] `grep` for hardcoded colours returns nothing
 - [ ] 404 and error pages designed, not framework defaults
 - [ ] OG images render correctly when a link is shared to WhatsApp
+- [ ] Rate limiter is in-memory and per-instance. On Vercel a burst spread across
+      lambdas exceeds the intended ceiling. Decide before launch whether a shared
+      store is needed.
 - [ ] `NEXT_PUBLIC_SITE_URL` set explicitly in Vercel once the real domain is live.
       Until then production resolves to the `vercel.app` host, and canonical URLs,
       sitemap and OG images will all point at the wrong origin. OG images fail
