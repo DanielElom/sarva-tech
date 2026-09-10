@@ -336,7 +336,10 @@ assumptions, and confirmation of readiness for the next session without starting
 ## 13. Before launch
 
 - [ ] Domain registered and pointed at Vercel
-- [ ] Resend sending domain verified via DNS, real delivery tested to an external inbox
+- [ ] Resend sending domain verified via DNS, real delivery tested to an external inbox.
+      Until then notifications send from Resend's test address
+      (`onboarding@resend.dev`), which only delivers to the account owner and
+      will land in spam for anyone else. `RESEND_FROM` switches it over.
 - [ ] Google Workspace mailbox live, address wired into footer and contact page
 - [ ] Supabase intake table has row-level security, anon key cannot read submissions
 - [ ] Privacy policy written, personal data collection disclosed

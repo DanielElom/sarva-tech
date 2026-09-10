@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { deriveOverall, type HealthCheck, type HealthReport } from '@/lib/health';
+import { getServiceClient } from '@/lib/supabase-server';
 
 /**
  * GET /api/health — CLAUDE.md 8.
@@ -17,24 +18,57 @@ export const revalidate = 0;
 
 const startedAt = Date.now();
 
-function checkSupabase(): HealthCheck {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    return {
-      status: 'not_configured',
-      detail: 'Supabase credentials are not set. Intake storage is wired in S5.',
-    };
+/**
+ * A real round trip, not a configuration check.
+ *
+ * It counts rows in the submissions table with the service role, which is the
+ * same path a submission takes: if this succeeds, storing a lead will too. A
+ * probe that only asked "are the variables set?" would report ok while the
+ * database was unreachable, which is the failure CLAUDE.md 8 exists to prevent.
+ *
+ * The timeout matters as much as the query. Without it an unreachable database
+ * hangs the health endpoint instead of reporting that it is unreachable.
+ */
+async function checkSupabase(): Promise<HealthCheck> {
+  const supabase = getServiceClient();
+  if (!supabase.configured) {
+    return { status: 'not_configured', detail: supabase.reason };
   }
 
-  // Deliberately not reachable yet: with no project provisioned there is
-  // nothing to probe, and a probe that always passes is worse than no probe.
-  // S5 replaces this branch with a real round trip against the intake table.
-  return {
-    status: 'degraded',
-    detail: 'Credentials present but the connection probe is not implemented until S5.',
-  };
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const { error } = await supabase.client
+      .from('submissions')
+      .select('id', { count: 'exact', head: true })
+      .abortSignal(controller.signal);
+
+    if (error) {
+      return {
+        status: 'down',
+        detail: `Query against submissions failed: ${error.message}`,
+        latencyMs: Date.now() - startedAt,
+      };
+    }
+    return {
+      status: 'ok',
+      detail: 'Queried the submissions table with the service role.',
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      status: 'down',
+      detail:
+        controller.signal.aborted
+          ? 'Supabase did not answer within 4s.'
+          : `Supabase probe threw: ${error instanceof Error ? error.message : 'unknown'}`,
+      latencyMs: Date.now() - startedAt,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function GET(request: Request) {
@@ -53,7 +87,7 @@ export async function GET(request: Request) {
       detail: 'Route handler responded.',
       latencyMs: Date.now() - receivedAt,
     },
-    supabase: checkSupabase(),
+    supabase: await checkSupabase(),
   };
 
   if (simulate === 'down') {

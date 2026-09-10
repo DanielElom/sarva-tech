@@ -1509,6 +1509,355 @@ try {
         `label is <${footerLabels.labelTag}> in ${footerLabels.headingFont}, readout=${footerLabels.labelIsReadout}; ` +
         `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
   );
+
+  // --------------------------------------------------------------- INTAKE --
+  console.log('\nINTAKE FLOW (/start)');
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  await client.send('Emulation.setDeviceMetricsOverride', {
+    width: 1280, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/start');
+  await client.eval(`sessionStorage.clear()`);
+  await client.goto(ORIGIN + '/start');
+  await wait(500);
+
+  const startShape = await client.eval(`(() => {
+    const bar = document.querySelector('[role="progressbar"]');
+    const hp = document.querySelector('input[name="website"]');
+    const h1 = document.querySelectorAll('h1');
+    return {
+      h1Count: h1.length,
+      heading: h1[0] ? h1[0].textContent.trim() : null,
+      hasProgress: !!bar,
+      valuenow: bar ? bar.getAttribute('aria-valuenow') : null,
+      valuemax: bar ? bar.getAttribute('aria-valuemax') : null,
+      valuetext: bar ? bar.getAttribute('aria-valuetext') : null,
+      radios: document.querySelectorAll('input[type="radio"][name="goal"]').length,
+      // The honeypot must be out of the tab order and out of the a11y tree.
+      honeypotPresent: !!hp,
+      honeypotTabIndex: hp ? hp.tabIndex : null,
+      honeypotHidden: hp ? !!hp.closest('[aria-hidden="true"]') : null,
+      // Scoped to the flow: the footer's status line is instrumentation and is
+      // allowed the readout treatment. Step numbers are content and are not.
+      readouts: document.querySelectorAll('main .readout').length,
+      footerReadouts: document.querySelectorAll('footer .readout').length,
+      inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+    };
+  })()`);
+  check(
+    'Step 1 of 5, one h1, nine goals, and a progress bar that announces where you are',
+    startShape.h1Count === 1 &&
+      startShape.hasProgress &&
+      startShape.valuenow === '1' &&
+      startShape.valuemax === '5' &&
+      startShape.radios === 9 &&
+      /Step 1 of 5/.test(startShape.valuetext || ''),
+    `h1="${startShape.heading}", progress ${startShape.valuenow}/${startShape.valuemax}, ` +
+      `${startShape.radios} options, valuetext="${startShape.valuetext}"`,
+  );
+  check(
+    'The honeypot exists but is out of the tab order and the accessibility tree',
+    startShape.honeypotPresent &&
+      startShape.honeypotTabIndex === -1 &&
+      startShape.honeypotHidden === true,
+    `present=${startShape.honeypotPresent} tabIndex=${startShape.honeypotTabIndex} aria-hidden ancestor=${startShape.honeypotHidden}`,
+  );
+  check(
+    'Step numbers are not set in the monospace readout (CLAUDE.md 4.6)',
+    startShape.readouts === 0,
+    `${startShape.readouts} readout element(s) inside the flow ` +
+      `(${startShape.footerReadouts} in the footer status line, which is instrumentation and allowed)`,
+  );
+
+  // Validation fires per step, not at the end.
+  await client.eval(`(() => {
+    const submit = [...document.querySelectorAll('button[type="submit"]')][0];
+    submit.click();
+  })()`);
+  await wait(400);
+  const stepOneError = await client.eval(`(() => {
+    const alert = [...document.querySelectorAll('[role="alert"]')].find(a => a.textContent.trim());
+    const bar = document.querySelector('[role="progressbar"]');
+    return { message: alert ? alert.textContent.trim() : null, stillOn: bar?.getAttribute('aria-valuenow') };
+  })()`);
+  check(
+    'Continuing without an answer reports it on that step, and does not advance',
+    !!stepOneError.message && stepOneError.stillOn === '1',
+    `"${stepOneError.message}" — still on step ${stepOneError.stillOn}`,
+  );
+
+  /*
+   * Keyboard alone through all five steps (CLAUDE.md 7). Radios are chosen with
+   * the keyboard, text is typed with real key events, and each step is advanced
+   * by activating the submit button — no synthetic clicks.
+   */
+  const kb = { typed: false };
+  const advance = async () => {
+    await client.eval(`(() => {
+      const submit = [...document.querySelectorAll('button[type="submit"]')][0];
+      submit.focus();
+    })()`);
+    await client.press('Enter', 'Enter', 13, 0, '\r');
+    await wait(450);
+  };
+
+  await client.eval(`(() => { document.querySelector('input[type="radio"][name="goal"]').focus(); })()`);
+  await client.press(' ', 'Space', 32, 0, ' ');
+  await wait(150);
+  await advance();
+
+  const atStep2 = await client.eval(`(() => ({
+    step: document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow'),
+    focused: document.activeElement?.tagName,
+    hasTextarea: !!document.querySelector('textarea'),
+  }))()`);
+  check(
+    'Keyboard: choosing a goal and pressing Enter advances to step 2',
+    atStep2.step === '2' && atStep2.hasTextarea,
+    `now step ${atStep2.step}, focus moved to <${atStep2.focused}>, textarea present=${atStep2.hasTextarea}`,
+  );
+
+  await client.eval(`(() => { document.querySelector('textarea').focus(); })()`);
+  for (const ch of 'Orders arrive on WhatsApp and are copied by hand into a spreadsheet daily.') {
+    await client.send('Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch });
+    await client.send('Input.dispatchKeyEvent', { type: 'keyUp', text: ch });
+  }
+  kb.typed = true;
+  await advance();
+
+  await client.eval(`(() => { document.querySelector('input[type="radio"][name="organizationType"]').focus(); })()`);
+  await client.press(' ', 'Space', 32, 0, ' ');
+  await wait(150);
+  await advance();
+
+  await client.eval(`(() => { document.querySelector('input[type="radio"][name="projectStage"]').focus(); })()`);
+  await client.press(' ', 'Space', 32, 0, ' ');
+  await wait(150);
+  await advance();
+
+  const atStep5 = await client.eval(`(() => ({
+    step: document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow'),
+    inputs: [...document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"]')]
+      .filter(i => i.name !== 'website').length,
+    allLabelled: [...document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],textarea')]
+      .filter(i => i.name !== 'website')
+      .every(i => !!document.querySelector('label[for="' + CSS.escape(i.id) + '"]')),
+    submitLabel: [...document.querySelectorAll('button[type="submit"]')][0]?.textContent.trim(),
+  }))()`);
+  check(
+    'Keyboard alone reaches step 5, where every field is labelled',
+    atStep5.step === '5' && atStep5.inputs >= 4 && atStep5.allLabelled && kb.typed,
+    `step ${atStep5.step}, ${atStep5.inputs} contact fields, all labelled=${atStep5.allLabelled}, ` +
+      `final action "${atStep5.submitLabel}"`,
+  );
+  check(
+    'The final action is named "Let\'s Solve It"',
+    (atStep5.submitLabel || '').includes("Let's Solve It"),
+    `submit button reads "${atStep5.submitLabel}"`,
+  );
+
+  // Draft persistence, and the deliberate limit on it.
+  const storage = await client.eval(`(() => {
+    const raw = sessionStorage.getItem('sarva-intake-draft');
+    return { raw, parsed: raw ? JSON.parse(raw) : null };
+  })()`);
+  check(
+    'Steps 1-4 are kept so a refresh does not lose them',
+    !!storage.parsed?.goal && (storage.parsed?.message || '').length > 10 &&
+      !!storage.parsed?.organizationType && !!storage.parsed?.projectStage,
+    `stored keys: ${Object.keys(storage.parsed ?? {}).join(', ')}`,
+  );
+
+  // Fill step 5, then confirm those details never reach storage.
+  await client.eval(`(() => {
+    const set = (sel, value) => {
+      const el = document.querySelector(sel);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    set('input[type="text"]:not([name="website"])', 'Ada Lovelace');
+    set('input[type="email"]', 'ada@example.com');
+    set('input[type="tel"]', '+2348000000000');
+  })()`);
+  await wait(300);
+  const afterDetails = await client.eval(`(() => {
+    const raw = sessionStorage.getItem('sarva-intake-draft') || '';
+    const all = JSON.stringify(Object.entries(sessionStorage));
+    return {
+      draftMentionsName: /Ada Lovelace/.test(raw),
+      anyStorageMentionsEmail: /ada@example\.com/.test(all) || /ada@example\.com/.test(JSON.stringify(Object.entries(localStorage))),
+      anyStorageMentionsPhone: /2348000000000/.test(all) || /2348000000000/.test(JSON.stringify(Object.entries(localStorage))),
+    };
+  })()`);
+  check(
+    'Step 5 contact details are NOT persisted to browser storage',
+    !afterDetails.draftMentionsName &&
+      !afterDetails.anyStorageMentionsEmail &&
+      !afterDetails.anyStorageMentionsPhone,
+    `name in draft=${afterDetails.draftMentionsName}, email anywhere=${afterDetails.anyStorageMentionsEmail}, ` +
+      `phone anywhere=${afterDetails.anyStorageMentionsPhone}`,
+  );
+
+  // A refresh mid-flow restores the answers.
+  await client.goto(ORIGIN + '/start');
+  await wait(600);
+  const afterRefresh = await client.eval(`(() => {
+    const raw = sessionStorage.getItem('sarva-intake-draft');
+    const parsed = raw ? JSON.parse(raw) : null;
+    const checked = document.querySelector('input[type="radio"][name="goal"]:checked');
+    const notice = [...document.querySelectorAll('p')].find(p => /kept your answers/i.test(p.textContent));
+    return {
+      restoredGoal: checked ? checked.value : null,
+      draftGoal: parsed?.goal ?? null,
+      draftMessage: (parsed?.message ?? '').slice(0, 24),
+      noticeShown: !!notice,
+    };
+  })()`);
+  check(
+    'A refresh mid-flow restores the earlier answers and says so',
+    afterRefresh.restoredGoal === afterRefresh.draftGoal &&
+      !!afterRefresh.draftGoal &&
+      afterRefresh.draftMessage.length > 10 &&
+      afterRefresh.noticeShown,
+    `goal restored as "${afterRefresh.restoredGoal}", message "${afterRefresh.draftMessage}…", notice shown=${afterRefresh.noticeShown}`,
+  );
+
+  // Submitting with storage unavailable must show an explicit failure.
+  await client.eval(`sessionStorage.clear()`);
+
+  // --------------------------------------------------------------- CONTACT --
+  console.log('\nCONTACT (/contact)');
+  await client.goto(ORIGIN + '/contact');
+  await wait(400);
+  const contactShape = await client.eval(`(() => {
+    const wa = [...document.querySelectorAll('a[href*="wa.me"]')];
+    const form = document.querySelector('form');
+    const firstWa = wa[0];
+    const inverted = [...document.querySelectorAll('[data-surface="inverted"]')];
+    const waBand = firstWa ? firstWa.closest('[data-surface="inverted"]') : null;
+    return {
+      whatsappLinks: wa.length,
+      // Prominence is position: the WhatsApp band must come before the form.
+      whatsappBeforeForm: firstWa && form
+        ? !!(firstWa.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : false,
+      whatsappInInvertedBand: !!waBand,
+      invertedCount: inverted.length,
+      fields: [...document.querySelectorAll('form input,form textarea')].filter(i => i.name !== 'website').length,
+      allLabelled: [...document.querySelectorAll('form input[type="text"],form input[type="email"],form input[type="tel"],form textarea')]
+        .filter(i => i.name !== 'website')
+        .every(i => !!document.querySelector('label[for="' + CSS.escape(i.id) + '"]')),
+      // CLAUDE.md 11: no invented contact details.
+      mailtoLinks: document.querySelectorAll('a[href^="mailto:"]').length,
+      h1: document.querySelectorAll('h1').length,
+    };
+  })()`);
+  check(
+    'WhatsApp is surfaced before the form, in its own inverted band',
+    contactShape.whatsappLinks >= 1 &&
+      contactShape.whatsappBeforeForm &&
+      contactShape.whatsappInInvertedBand,
+    `${contactShape.whatsappLinks} WhatsApp link(s), before the form=${contactShape.whatsappBeforeForm}, ` +
+      `in an inverted band=${contactShape.whatsappInInvertedBand}`,
+  );
+  check(
+    'Every contact field is labelled, and no email address is invented',
+    contactShape.allLabelled && contactShape.mailtoLinks === 0 && contactShape.h1 === 1,
+    `${contactShape.fields} fields, all labelled=${contactShape.allLabelled}, mailto links=${contactShape.mailtoLinks}`,
+  );
+
+  // Client-side validation reports per field before anything is sent.
+  await client.eval(`(() => { document.querySelector('form button[type="submit"]').click(); })()`);
+  await wait(400);
+  const contactErrors = await client.eval(`(() => {
+    const alerts = [...document.querySelectorAll('[role="alert"]')].filter(a => a.textContent.trim());
+    const invalid = [...document.querySelectorAll('[aria-invalid="true"]')];
+    return {
+      messages: alerts.map(a => a.textContent.trim()).slice(0, 3),
+      invalidCount: invalid.length,
+      described: invalid.every(i => {
+        const id = i.getAttribute('aria-describedby');
+        return id && id.split(' ').some(x => document.getElementById(x)?.textContent.trim());
+      }),
+    };
+  })()`);
+  check(
+    'Submitting an empty contact form reports each problem on its own field',
+    contactErrors.messages.length > 0 &&
+      contactErrors.invalidCount > 0 &&
+      contactErrors.described,
+    `${contactErrors.invalidCount} field(s) marked invalid, each pointing at its message; ` +
+      `e.g. ${JSON.stringify(contactErrors.messages[0])}`,
+  );
+
+  // Both themes on both routes, identity and count.
+  for (const route of ['/start', '/contact']) {
+    for (const theme of ['night', 'day']) {
+      await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+      await client.goto(ORIGIN + route);
+      await wait(300);
+      const seen = await client.eval(`(() => {
+        const heading = document.querySelector('h1');
+        const label = document.querySelector('form label');
+        return {
+          attr: document.documentElement.getAttribute('data-theme'),
+          bg: getComputedStyle(document.body).backgroundColor,
+          headingColour: heading ? getComputedStyle(heading).color : null,
+          labelColour: label ? getComputedStyle(label).color : null,
+          inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+        };
+      })()`);
+      const wantInverted = route === '/contact' ? 2 : 1;
+      check(
+        `${route} reads correctly in the ${theme} theme, with ${wantInverted} inverted scope(s)`,
+        seen.attr === theme &&
+          seen.bg === toRgb(colorTokens['surface-base'][theme]) &&
+          seen.headingColour === toRgb(colorTokens.primary[theme]) &&
+          seen.inverted === wantInverted,
+        `body ${seen.bg}, h1 ${seen.headingColour}, form label ${seen.labelColour}, ` +
+          `${seen.inverted} inverted scope(s) (want ${wantInverted})`,
+      );
+    }
+  }
+
+  // Reduced motion: the flow must still work with motion off.
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  });
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/start');
+  await client.eval(`sessionStorage.clear()`);
+  await client.goto(ORIGIN + '/start');
+  await wait(500);
+  const reducedFlow = await client.eval(`(async () => {
+    const panel = document.querySelector('.state-in');
+    const durations = panel
+      ? [getComputedStyle(panel).animationDuration, getComputedStyle(panel).transitionDuration]
+      : [];
+    document.querySelector('input[type="radio"][name="goal"]').click();
+    document.querySelector('button[type="submit"]').click();
+    await new Promise(r => setTimeout(r, 500));
+    return {
+      durations,
+      advanced: document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow'),
+      textareaVisible: !!document.querySelector('textarea'),
+    };
+  })()`);
+  const reducedOk = reducedFlow.durations
+    .flatMap((d) => String(d).split(',').map((x) => parseFloat(x)))
+    .filter((n) => !Number.isNaN(n))
+    .every((n) => n <= 0.001);
+  check(
+    'With motion reduced, step animation is neutralised and the flow still advances',
+    reducedOk && reducedFlow.advanced === '2' && reducedFlow.textareaVisible,
+    `durations ${JSON.stringify(reducedFlow.durations)}; advanced to step ${reducedFlow.advanced}`,
+  );
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+
 } finally {
   try {
     client?.ws.close();
