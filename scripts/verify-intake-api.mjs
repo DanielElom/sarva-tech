@@ -125,5 +125,24 @@ console.log('\nINTAKE API CONTRACT\n');
   }
 }
 
+// -- A lead must outlive the notification --------------------------------------
+if (process.env.SARVA_MAIL_BROKEN === '1') {
+  /*
+   * Only meaningful when the server was started with a Resend key that cannot
+   * work. CLAUDE.md 9: the row is the source of truth and the email is a
+   * convenience, so a send failure must not reach the person as a failure.
+   */
+  const res = await post(
+    { ...validContact, message: 'Sent while the Resend key is deliberately broken.' },
+    '198.51.100.7',
+  );
+  const body = await res.json();
+  check(
+    'A lead survives a broken Resend key',
+    res.status === 201 && body.ok === true && !!body.id,
+    `HTTP ${res.status} — ${JSON.stringify(body).slice(0, 120)}`,
+  );
+}
+
 console.log(`\n  ${failures === 0 ? 'API contract holds.' : `${failures} FAILURE(S)`}\n`);
 process.exit(failures === 0 ? 0 : 1);

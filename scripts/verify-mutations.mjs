@@ -283,14 +283,22 @@ const MUTATIONS = [
   {
     name: 'Email failure is allowed to fail the whole submission',
     file: 'app/api/intake/route.ts',
-    find: '  const notified = await notifySubmission(submission, data.id);',
+    find: '  return NextResponse.json({ ok: true, id: data.id }, { status: 201 });',
     replace:
-      '  const notified = await notifySubmission(submission, data.id);\n' +
-      "  if (!notified.sent) return NextResponse.json({ ok: false, error: 'mail failed' }, { status: 502 });",
+      "  if (!notified.sent) {\n" +
+      "    return NextResponse.json({ ok: false, error: 'mail failed' }, { status: 502 });\n" +
+      '  }\n' +
+      '  return NextResponse.json({ ok: true, id: data.id }, { status: 201 });',
     artefact: "error: 'mail failed'",
     expect: 'A lead survives a broken Resend key',
     api: true,
     requiresSupabase: true,
+    // The defect is invisible while mail works, so the server runs with a key
+    // that cannot succeed and the suite is told to expect that.
+    serverEnv: {
+      RESEND_API_KEY: 're_broken_key_for_mutation_testing',
+      SARVA_MAIL_BROKEN: '1',
+    },
   },
   {
     name: 'Step 5 contact details written to browser storage',
@@ -511,7 +519,7 @@ function apply(mutation) {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function runSuite() {
+async function runSuite(serverEnv = {}) {
   const build = spawnSync('pnpm', ['exec', 'next', 'build'], {
     cwd: root,
     encoding: 'utf-8',
@@ -552,7 +560,7 @@ async function runSuite() {
       const suite = spawnSync('node', [join(root, script), ORIGIN], {
         cwd: root,
         encoding: 'utf-8',
-        env: { ...process.env, SARVA_SCOPE: 'home' },
+        env: { ...process.env, ...serverEnv, SARVA_SCOPE: 'home' },
         timeout: 8 * 60 * 1000,
         killSignal: 'SIGKILL',
       });
@@ -596,7 +604,7 @@ try {
       continue;
     }
     apply(mutation);
-    const { buildFailed, timedOut, output } = await runSuite();
+    const { buildFailed, timedOut, output } = await runSuite(mutation.serverEnv ?? {});
 
     const problems = restoreAll();
     if (problems.length) {
