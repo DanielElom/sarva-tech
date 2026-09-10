@@ -254,6 +254,14 @@ const MUTATIONS = [
     expect: 'Footer navigation group labels do not use the readout treatment',
   },
   {
+    name: 'Progress bar left without an accessible name',
+    file: 'components/sections/intake-flow.tsx',
+    find: '          aria-label="Progress through the intake"\n',
+    replace: '',
+    artefact: null,
+    expect: 'The progress bar has an accessible name',
+  },
+  {
     name: 'Honeypot field name echoed back to the sender',
     file: 'app/api/intake/route.ts',
     find: '    if (!key || key === HONEYPOT_FIELD) continue;',

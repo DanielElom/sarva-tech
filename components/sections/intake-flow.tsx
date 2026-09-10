@@ -323,6 +323,7 @@ export function IntakeFlow() {
         </div>
         <div
           role="progressbar"
+          aria-label="Progress through the intake"
           aria-valuemin={1}
           aria-valuemax={TOTAL_STEPS}
           aria-valuenow={step + 1}

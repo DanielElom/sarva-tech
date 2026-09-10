@@ -1535,6 +1535,14 @@ try {
       valuenow: bar ? bar.getAttribute('aria-valuenow') : null,
       valuemax: bar ? bar.getAttribute('aria-valuemax') : null,
       valuetext: bar ? bar.getAttribute('aria-valuetext') : null,
+      // A progressbar with no accessible name is announced as an anonymous
+      // progressbar. Lighthouse caught this at 96 where every other route is 100.
+      progressName: bar
+        ? bar.getAttribute('aria-label') ||
+          (bar.getAttribute('aria-labelledby')
+            ? document.getElementById(bar.getAttribute('aria-labelledby'))?.textContent.trim()
+            : null)
+        : null,
       radios: document.querySelectorAll('input[type="radio"][name="goal"]').length,
       // The honeypot must be out of the tab order and out of the a11y tree.
       honeypotPresent: !!hp,
@@ -1547,6 +1555,11 @@ try {
       inverted: document.querySelectorAll('[data-surface="inverted"]').length,
     };
   })()`);
+  check(
+    'The progress bar has an accessible name',
+    !!startShape.progressName,
+    `aria-label="${startShape.progressName}"`,
+  );
   check(
     'Step 1 of 5, one h1, nine goals, and a progress bar that announces where you are',
     startShape.h1Count === 1 &&
