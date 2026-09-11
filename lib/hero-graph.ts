@@ -19,8 +19,12 @@ export type GraphNode = {
   x: number;
   y: number;
   radius: number;
-  /** Hubs are drawn heavier and carry the accent fill. */
+  /**
+   * Visual weight. `hub` nodes are the largest and carry the accent fill;
+   * `accent` nodes are smaller but still amber; the rest are muted.
+   */
   hub: boolean;
+  accent: boolean;
   /** Drift parameters. Bounded oscillation, never a random walk. */
   phase: number;
   amplitude: number;
@@ -41,10 +45,19 @@ function seeded(seed: number): () => number {
   };
 }
 
-const NODE_COUNT = 18;
-const HUB_IDS = new Set([2, 7, 13]);
+/*
+ * Density matches the approved design: a populated graph rather than a sketch.
+ * Node count is geometry, not payload — the drawing code is a loop, so sixty
+ * nodes cost the same bytes as eighteen.
+ */
+const NODE_COUNT = 60;
+/** Every third node is amber, and every tenth is a full hub. */
+const isHub = (id: number) => id % 10 === 3;
+const isAccent = (id: number) => !isHub(id) && id % 3 === 1;
 /** Two nodes join if they are closer than this, in viewBox units. */
-const CONNECT_WITHIN = 78;
+const CONNECT_WITHIN = 46;
+/** Rejection-sampling floor, loose enough that sixty nodes actually fit. */
+const MIN_SEPARATION = 17;
 
 export function buildGraph(): { nodes: GraphNode[]; edges: GraphEdge[] } {
   const random = seeded(20260904);
@@ -60,22 +73,32 @@ export function buildGraph(): { nodes: GraphNode[]; edges: GraphEdge[] } {
       x = margin + random() * (width - margin * 2);
       y = margin + random() * (height - margin * 2);
       const tooClose = nodes.some(
-        (other) => Math.hypot(other.x - x, other.y - y) < 30,
+        (other) => Math.hypot(other.x - x, other.y - y) < MIN_SEPARATION,
       );
       if (!tooClose) break;
     }
-    const hub = HUB_IDS.has(id);
+    const hub = isHub(id);
+    const accent = isAccent(id);
     nodes.push({
       id,
       x,
       y,
-      radius: hub ? 4.2 : 2.1,
+      radius: hub ? 4.6 : accent ? 2.6 : 1.8,
       hub,
+      accent,
       phase: random() * Math.PI * 2,
-      // Deliberately small. This reads as instrumentation settling, not drifting
-      // decoration — a node never travels more than ~3px at the rendered size.
-      amplitude: 1.6 + random() * 1.8,
-      speed: 0.08 + random() * 0.07,
+      /*
+       * Slow, but actually visible.
+       *
+       * These were 1.6-3.4 units over a 47-75 second cycle, which works out at
+       * 0.22-0.69 CSS px/sec once drawn — below the speed at which a person
+       * reads something as moving, so the panel looked static in production
+       * while the loop ran at 60fps. At roughly 1.5 px per viewBox unit these
+       * give a peak of about 4-7 px/sec on a cycle of 8-13 seconds: a graph
+       * that breathes, still nowhere near a screensaver.
+       */
+      amplitude: 3.2 + random() * 1.8,
+      speed: 0.5 + random() * 0.32,
     });
   }
 
@@ -108,7 +131,8 @@ export function driftedPosition(
  * makes the graph look like a topology rather than a mesh of equal lines.
  */
 export function edgeOpacity(edge: GraphEdge): number {
-  return 0.5 - (edge.length / CONNECT_WITHIN) * 0.32;
+  // Denser graph, so each line carries less weight or the panel turns to mesh.
+  return 0.34 - (edge.length / CONNECT_WITHIN) * 0.2;
 }
 
 export const CONNECT_DISTANCE = CONNECT_WITHIN;

@@ -75,8 +75,8 @@ export function HeroNodeGraph() {
               cx={node.x}
               cy={node.y}
               r={node.radius}
-              className={node.hub ? 'fill-accent' : 'fill-muted'}
-              opacity={node.hub ? 0.95 : 0.7}
+              className={node.hub || node.accent ? 'fill-accent' : 'fill-muted'}
+              opacity={node.hub ? 0.95 : node.accent ? 0.8 : 0.55}
             />
           ))}
         </g>

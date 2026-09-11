@@ -27,10 +27,30 @@ import {
  * follow the theme toggle for free.
  */
 
-/** Frame count is exposed so the pause behaviour can be asserted, not assumed. */
-type InstrumentedCanvas = HTMLCanvasElement & { __heroFrames?: number };
+/**
+ * Frame count is exposed so the pause behaviour can be asserted, not assumed.
+ *
+ * `__heroMotion` exists because counting frames turned out to prove almost
+ * nothing. The loop ran at 60fps in production while the graph was, to a person
+ * looking at it, completely still: peak node speed was 0.22-0.69 px/sec over a
+ * 47-75 second cycle. A check that watches a frame counter passes happily while
+ * the thing renders an imperceptibly different image every time. This reports
+ * the motion in the units that matter — CSS pixels per second at the size the
+ * panel is actually drawn — so the suite can assert that something MOVES rather
+ * than that a function was called.
+ */
+type HeroMotion = {
+  peakSpeedPxPerSec: number;
+  slowestPeriodSec: number;
+  nodeCount: number;
+  amberCount: number;
+};
+type InstrumentedCanvas = HTMLCanvasElement & {
+  __heroFrames?: number;
+  __heroMotion?: HeroMotion;
+};
 
-type Palette = { edge: string; node: string; hub: string };
+type Palette = { edge: string; node: string; hub: string; accent: string };
 
 function readPalette(element: Element): Palette {
   const styles = getComputedStyle(element);
@@ -39,6 +59,7 @@ function readPalette(element: Element): Palette {
     edge: token('--sv-muted'),
     node: token('--sv-muted'),
     hub: token('--sv-accent'),
+    accent: token('--sv-accent'),
   };
 }
 
@@ -56,6 +77,16 @@ export default function HeroNodeGraphCanvas() {
     const scaleY = () => canvas.clientHeight / GRAPH_VIEWBOX.height;
 
     let palette = readPalette(canvas);
+
+    const reportMotion = () => {
+      const scale = Math.min(scaleX(), scaleY());
+      canvas.__heroMotion = {
+        peakSpeedPxPerSec: Math.max(...nodes.map((n) => n.amplitude * n.speed * scale)),
+        slowestPeriodSec: Math.max(...nodes.map((n) => (2 * Math.PI) / n.speed)),
+        nodeCount: nodes.length,
+        amberCount: nodes.filter((n) => n.hub || n.accent).length,
+      };
+    };
     let frame = 0;
     let running = false;
     let onScreen = false;
@@ -110,8 +141,12 @@ export default function HeroNodeGraphCanvas() {
 
       for (const [index, node] of nodes.entries()) {
         const position = positions[index]!;
-        context.globalAlpha = node.hub ? 0.95 : 0.7;
-        context.fillStyle = node.hub ? palette.hub : palette.node;
+        context.globalAlpha = node.hub ? 0.95 : node.accent ? 0.8 : 0.55;
+        context.fillStyle = node.hub
+          ? palette.hub
+          : node.accent
+            ? palette.accent
+            : palette.node;
         context.beginPath();
         context.arc(
           position.x * sx,
@@ -174,6 +209,7 @@ export default function HeroNodeGraphCanvas() {
 
     const resizeObserver = new ResizeObserver(() => {
       resize();
+      reportMotion();
       if (!running) draw();
     });
     resizeObserver.observe(canvas);
@@ -205,6 +241,7 @@ export default function HeroNodeGraphCanvas() {
     }
 
     resize();
+    reportMotion();
     draw();
     canvas.dataset.state = 'paused';
 

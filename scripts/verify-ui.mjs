@@ -442,11 +442,30 @@ try {
     console.log('\nSTATUS LINE');
     await client.goto(ORIGIN + '/');
     await wait(700);
-    const status = await client.eval(`(() => {
-      const el = document.querySelector('[aria-live="polite"]');
-      return { text: el.textContent.trim().replace(/\\s+/g, ' '), live: el.getAttribute('aria-live') };
-    })()`);
-    const health = await (await fetch(ORIGIN + '/api/health')).json();
+    /*
+     * The readout and this script are two independent observations of a live
+     * system. The Supabase probe takes over a second and can time out under
+     * load, so the browser's reading and a fetch from here can legitimately
+     * disagree — which made these checks flap. Reload until they agree, and
+     * report the last disagreement if they never do.
+     */
+    let status = null;
+    let health = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      health = await (await fetch(ORIGIN + '/api/health')).json();
+      status = await client.eval(`(() => {
+        const el = document.querySelector('[aria-live="polite"]');
+        return { text: el.textContent.trim().replace(/\\s+/g, ' '), live: el.getAttribute('aria-live') };
+      })()`);
+      const agrees =
+        status.text.toLowerCase().includes(EXPECTED_STATUS_LABEL[health.status]) &&
+        Object.entries(health.checks).every(([name, c]) =>
+          status.text.includes(`${name}: ${c.status}`),
+        );
+      if (agrees) break;
+      await client.goto(ORIGIN + '/');
+      await wait(1500);
+    }
     check(
       'Status line reflects the real /api/health response, not a hardcoded string',
       status.text.toLowerCase().includes(EXPECTED_STATUS_LABEL[health.status]) &&
@@ -836,6 +855,68 @@ try {
   );
 
   // -- Off-screen: the loop must stop, not merely slow down.
+  /*
+   * Frames advancing is not motion. In production this canvas ran at 60fps while
+   * the graph was visually static, because peak node speed was under 0.7 px/sec
+   * over a cycle lasting the better part of a minute. These two checks assert
+   * that something actually moves: one reads the motion the component reports in
+   * CSS pixels per second at its real drawn size, the other watches the pixels.
+   */
+  const motion = await client.eval(`(() => {
+    const c = document.querySelector('[data-hero-canvas]');
+    return c && c.__heroMotion ? c.__heroMotion : null;
+  })()`);
+  check(
+    'The graph moves fast enough to be seen (>= 2 px/sec peak, cycle under 30s)',
+    !!motion && motion.peakSpeedPxPerSec >= 2 && motion.slowestPeriodSec <= 30,
+    motion
+      ? `peak ${motion.peakSpeedPxPerSec.toFixed(2)} px/sec, slowest cycle ${motion.slowestPeriodSec.toFixed(0)}s ` +
+        `(a person reads movement from about 2 px/sec)`
+      : 'the canvas reported no motion figures',
+  );
+
+  const pixelChange = await client.eval(`(async () => {
+    const c = document.querySelector('[data-hero-canvas]');
+    if (!c) return null;
+    const ctx = c.getContext('2d');
+    const grab = () => ctx.getImageData(0, 0, c.width, c.height).data;
+    const before = grab();
+    const framesBefore = c.__heroFrames ?? 0;
+    const stateBefore = c.dataset.state;
+    await new Promise(r => setTimeout(r, 1200));
+    const after = grab();
+    let changed = 0;
+    for (let i = 0; i < before.length; i += 4) {
+      if (Math.abs(before[i]-after[i]) + Math.abs(before[i+1]-after[i+1]) +
+          Math.abs(before[i+2]-after[i+2]) + Math.abs(before[i+3]-after[i+3]) > 12) changed++;
+    }
+    return {
+      pct: (changed / (c.width * c.height)) * 100,
+      // Reported so a failure says WHY: a paused loop and an imperceptible one
+      // both show as no change, and they need different fixes.
+      framesAdvanced: (c.__heroFrames ?? 0) - framesBefore,
+      stateBefore,
+      stateAfter: c.dataset.state,
+      backing: [c.width, c.height],
+    };
+  })()`);
+  check(
+    'One second of the animation visibly redraws the panel (>= 10% of pixels)',
+    !!pixelChange && pixelChange.pct >= 10,
+    pixelChange
+      ? `${pixelChange.pct.toFixed(2)}% of pixels changed; ${pixelChange.framesAdvanced} frames drawn ` +
+        `(state ${pixelChange.stateBefore} -> ${pixelChange.stateAfter}, backing ${pixelChange.backing.join('x')})`
+      : 'no canvas to sample',
+  );
+
+  check(
+    'The graph has the density of the approved design (>= 50 nodes, >= 25% amber)',
+    !!motion && motion.nodeCount >= 50 && motion.amberCount / motion.nodeCount >= 0.25,
+    motion
+      ? `${motion.nodeCount} nodes, ${motion.amberCount} amber (${((motion.amberCount / motion.nodeCount) * 100).toFixed(0)}%)`
+      : 'no figures reported',
+  );
+
   await client.eval(`window.scrollTo(0, document.body.scrollHeight)`);
   await client.waitFor(
     `document.querySelector('[data-hero-canvas]')?.dataset.state === 'paused'`,
