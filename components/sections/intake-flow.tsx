@@ -294,7 +294,7 @@ export function IntakeFlow() {
             Reference {status.id.slice(0, 8)} — quote it if you follow up.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <ButtonLink href="/work" variant="secondary">
+            <ButtonLink href="/solutions" variant="secondary">
               See What We Build
             </ButtonLink>
             <a

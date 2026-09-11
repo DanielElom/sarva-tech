@@ -314,16 +314,23 @@ Footer copyright year is generated at build time, never typed.
 
 ## 12. Sessions
 
-| Session | Scope                                                                                                                    | Status      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| S1      | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy         | complete    |
-| S2      | Homepage part 1: hero + interactive visual, what we do, problem-first section                                            | complete    |
-| S3      | Homepage part 2: why Sarva Tech, technology ecosystem                                                                    | not started |
-| S4      | Content layer: MDX schemas, solutions and work listing + detail, four real case studies, services ecosystem on /services | not started |
-| S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                                      | not started |
-| S6      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                         | not started |
+| Session | Scope                                                                                                            | Status      |
+| ------- | ---------------------------------------------------------------------------------------------------------------- | ----------- |
+| S1      | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | complete    |
+| S2      | Homepage part 1: hero + interactive visual, what we do, problem-first section                                    | complete    |
+| S3      | Homepage part 2: why Sarva Tech, technology ecosystem                                                            | complete    |
+| S4      | /services: the five categories in detail, ecosystem map                                                          | complete    |
+| S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                              | complete    |
+| S6      | Content layer: MDX solutions, /solutions, homepage proof section, /work removed                                  | complete    |
+| S7      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                 | not started |
 
-S1 and S2 are complete. The conversion footer was built in S1, so S3 no longer includes it.
+The conversion footer was built in S1, so S3 no longer included it.
+
+**`/work` is removed.** All three products are in-house, so there are no client case
+studies to show. An empty or padded Work section costs more credibility than its absence
+does, on a site whose whole argument is that these people can build. Primary navigation is
+Home, Services, Solutions, About; `/work` permanently redirects to `/solutions`, which is
+where the products live. WoodMart is excluded by the client's decision.
 
 Two things were cut from S3 as repetition rather than content:
 

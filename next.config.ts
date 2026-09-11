@@ -31,6 +31,15 @@ const nextConfig: NextConfig = {
     // removes that round trip; the CSS is small because it is all tokens.
     inlineCss: true,
   },
+  /*
+   * /work is gone: there are no client case studies, and the products live on
+   * /solutions. A permanent redirect rather than a 404 or a 410 — the intent a
+   * visitor had is still served, just by a different page, and any inbound link
+   * keeps working.
+   */
+  async redirects() {
+    return [{ source: '/work', destination: '/solutions', permanent: true }];
+  },
   env: {
     // Stamped at build time so /api/health can report honestly when it was built.
     NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),

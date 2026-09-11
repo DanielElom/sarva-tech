@@ -112,12 +112,17 @@ export const SITE = {
 
 export type NavLink = { href: string; label: string };
 
-/** Primary navigation. Contact is not here on purpose — see CLAUDE.md 9. */
+/**
+ * Primary navigation. Contact is not here on purpose — see CLAUDE.md 9.
+ *
+ * Work is gone: all three products are in-house, so there are no client case
+ * studies. An empty or padded Work section costs more credibility than its
+ * absence does. /work redirects to /solutions, which is where the products are.
+ */
 export const PRIMARY_NAV: readonly NavLink[] = [
   { href: '/', label: 'Home' },
   { href: '/services', label: 'Services' },
   { href: '/solutions', label: 'Solutions' },
-  { href: '/work', label: 'Work' },
   { href: '/about', label: 'About' },
 ];
 
@@ -141,7 +146,6 @@ export const FOOTER_COLUMNS: readonly { heading: string; links: readonly NavLink
       { href: '/', label: 'Home' },
       { href: '/services', label: 'Services' },
       { href: '/solutions', label: 'Solutions' },
-      { href: '/work', label: 'Work' },
       { href: '/about', label: 'About' },
     ],
   },
@@ -158,7 +162,6 @@ export const FOOTER_COLUMNS: readonly { heading: string; links: readonly NavLink
     heading: 'Solutions',
     links: [
       { href: '/solutions', label: 'All Solutions' },
-      { href: '/work', label: 'Case Studies' },
       { href: '/start', label: 'Start a Project' },
     ],
   },

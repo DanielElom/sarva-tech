@@ -579,7 +579,7 @@ try {
       '/',
       '/services',
       '/solutions',
-      '/work',
+      // /work is gone and redirects to /solutions — see the WORK REMOVED checks.
       '/about',
       '/contact',
       '/privacy',
@@ -871,7 +871,7 @@ try {
     !!motion && motion.peakSpeedPxPerSec >= 2 && motion.slowestPeriodSec <= 30,
     motion
       ? `peak ${motion.peakSpeedPxPerSec.toFixed(2)} px/sec, slowest cycle ${motion.slowestPeriodSec.toFixed(0)}s ` +
-        `(a person reads movement from about 2 px/sec)`
+          `(a person reads movement from about 2 px/sec)`
       : 'the canvas reported no motion figures',
   );
 
@@ -905,7 +905,7 @@ try {
     !!pixelChange && pixelChange.pct >= 10,
     pixelChange
       ? `${pixelChange.pct.toFixed(2)}% of pixels changed; ${pixelChange.framesAdvanced} frames drawn ` +
-        `(state ${pixelChange.stateBefore} -> ${pixelChange.stateAfter}, backing ${pixelChange.backing.join('x')})`
+          `(state ${pixelChange.stateBefore} -> ${pixelChange.stateAfter}, backing ${pixelChange.backing.join('x')})`
       : 'no canvas to sample',
   );
 
@@ -1606,8 +1606,8 @@ try {
     footerLabels.missing
       ? 'no footer found'
       : `${footerLabels.navCount} nav group(s), ${footerLabels.readoutsInNav} readout element(s) inside them; ` +
-        `label is <${footerLabels.labelTag}> in ${footerLabels.headingFont}, readout=${footerLabels.labelIsReadout}; ` +
-        `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
+          `label is <${footerLabels.labelTag}> in ${footerLabels.headingFont}, readout=${footerLabels.labelIsReadout}; ` +
+          `remaining footer readouts: ${JSON.stringify(footerLabels.readoutTexts)}`,
   );
 
   // --------------------------------------------------------------- INTAKE --
@@ -1616,7 +1616,10 @@ try {
   await client.send('Emulation.clearDeviceMetricsOverride');
   await client.send('Emulation.setEmulatedMedia', { features: [] });
   await client.send('Emulation.setDeviceMetricsOverride', {
-    width: 1280, height: 900, deviceScaleFactor: 1, mobile: false,
+    width: 1280,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
   });
   await client.eval(`localStorage.setItem('sarva-theme','night')`);
   await client.goto(ORIGIN + '/start');
@@ -1717,7 +1720,9 @@ try {
     await wait(450);
   };
 
-  await client.eval(`(() => { document.querySelector('input[type="radio"][name="goal"]').focus(); })()`);
+  await client.eval(
+    `(() => { document.querySelector('input[type="radio"][name="goal"]').focus(); })()`,
+  );
   await client.press(' ', 'Space', 32, 0, ' ');
   await wait(150);
   await advance();
@@ -1735,18 +1740,26 @@ try {
 
   await client.eval(`(() => { document.querySelector('textarea').focus(); })()`);
   for (const ch of 'Orders arrive on WhatsApp and are copied by hand into a spreadsheet daily.') {
-    await client.send('Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch });
+    await client.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      text: ch,
+      unmodifiedText: ch,
+    });
     await client.send('Input.dispatchKeyEvent', { type: 'keyUp', text: ch });
   }
   kb.typed = true;
   await advance();
 
-  await client.eval(`(() => { document.querySelector('input[type="radio"][name="organizationType"]').focus(); })()`);
+  await client.eval(
+    `(() => { document.querySelector('input[type="radio"][name="organizationType"]').focus(); })()`,
+  );
   await client.press(' ', 'Space', 32, 0, ' ');
   await wait(150);
   await advance();
 
-  await client.eval(`(() => { document.querySelector('input[type="radio"][name="projectStage"]').focus(); })()`);
+  await client.eval(
+    `(() => { document.querySelector('input[type="radio"][name="projectStage"]').focus(); })()`,
+  );
   await client.press(' ', 'Space', 32, 0, ' ');
   await wait(150);
   await advance();
@@ -1779,8 +1792,10 @@ try {
   })()`);
   check(
     'Steps 1-4 are kept so a refresh does not lose them',
-    !!storage.parsed?.goal && (storage.parsed?.message || '').length > 10 &&
-      !!storage.parsed?.organizationType && !!storage.parsed?.projectStage,
+    !!storage.parsed?.goal &&
+      (storage.parsed?.message || '').length > 10 &&
+      !!storage.parsed?.organizationType &&
+      !!storage.parsed?.projectStage,
     `stored keys: ${Object.keys(storage.parsed ?? {}).join(', ')}`,
   );
 
@@ -1884,7 +1899,9 @@ try {
   );
 
   // Client-side validation reports per field before anything is sent.
-  await client.eval(`(() => { document.querySelector('form button[type="submit"]').click(); })()`);
+  await client.eval(
+    `(() => { document.querySelector('form button[type="submit"]').click(); })()`,
+  );
   await wait(400);
   const contactErrors = await client.eval(`(() => {
     const alerts = [...document.querySelectorAll('[role="alert"]')].filter(a => a.textContent.trim());
@@ -1961,7 +1978,11 @@ try {
     };
   })()`);
   const reducedOk = reducedFlow.durations
-    .flatMap((d) => String(d).split(',').map((x) => parseFloat(x)))
+    .flatMap((d) =>
+      String(d)
+        .split(',')
+        .map((x) => parseFloat(x)),
+    )
     .filter((n) => !Number.isNaN(n))
     .every((n) => n <= 0.001);
   check(
@@ -1971,6 +1992,170 @@ try {
   );
   await client.send('Emulation.setEmulatedMedia', { features: [] });
 
+  // ----------------------------------------------------------- SOLUTIONS --
+  console.log('\nSOLUTIONS');
+
+  await client.send('Emulation.clearDeviceMetricsOverride');
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/solutions');
+  await wait(400);
+
+  const solutions = await client.eval(`(() => {
+    const entries = [...document.querySelectorAll('article[id]')];
+    return {
+      count: entries.length,
+      slugs: entries.map(e => e.id),
+      names: entries.map(e => e.querySelector('h3')?.textContent.trim()),
+      // Every entry must carry all four substantive fields.
+      complete: entries.every(e => {
+        const labels = [...e.querySelectorAll('h4')].map(h => h.textContent.trim());
+        return ['The problem', 'What it does', 'Built with'].every(l => labels.includes(l));
+      }),
+      // No publicUrl on either entry right now: the link must simply be absent,
+      // and the entry must still read as finished.
+      visitLinks: entries.map(e =>
+        [...e.querySelectorAll('a')].filter(a => /^Visit /.test(a.textContent.trim())).length),
+      bodyLengths: entries.map(e => e.textContent.trim().length),
+      h1: document.querySelectorAll('h1').length,
+      inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+      // No dated promises anywhere in the copy.
+      datedPromise: /launching soon|coming (weeks|months|soon)|Q[1-4] 20\d\d|by (January|February|March|April|May|June|July|August|September|October|November|December)/i
+        .test(document.body.innerText),
+      statuses: entries.map(e => /In testing/.test(e.textContent)),
+    };
+  })()`);
+  check(
+    'Both solutions render, each with problem, description and technologies',
+    solutions.count === 2 && solutions.complete,
+    `${solutions.count} entries (${solutions.names.join(', ')}), all fields present=${solutions.complete}`,
+  );
+  check(
+    'An entry without publicUrl renders complete, with no link to nowhere',
+    solutions.visitLinks.every((n) => n === 0) &&
+      solutions.bodyLengths.every((n) => n > 300) &&
+      solutions.statuses.every(Boolean),
+    `visit links per entry ${JSON.stringify(solutions.visitLinks)} (want all 0); ` +
+      `content length ${JSON.stringify(solutions.bodyLengths)}; status shown on both=${solutions.statuses.every(Boolean)}`,
+  );
+  check(
+    'No launch dates or timeframes in the public copy',
+    !solutions.datedPromise,
+    solutions.datedPromise
+      ? 'found a dated promise in the page text'
+      : '"In testing" is the whole status',
+  );
+  check(
+    '/solutions has one h1 and one inverted scope besides the footer',
+    solutions.h1 === 1 && solutions.inverted === 2,
+    `h1=${solutions.h1}, inverted scopes=${solutions.inverted} (want 2)`,
+  );
+
+  for (const theme of ['night', 'day']) {
+    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+    await client.goto(ORIGIN + '/solutions');
+    await wait(300);
+    const seen = await client.eval(`(() => {
+      const entry = document.querySelector('article[id] h3');
+      const tagline = document.querySelector('article[id] p');
+      return {
+        attr: document.documentElement.getAttribute('data-theme'),
+        bg: getComputedStyle(document.body).backgroundColor,
+        heading: entry ? getComputedStyle(entry).color : null,
+        tagline: tagline ? getComputedStyle(tagline).color : null,
+        inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+      };
+    })()`);
+    check(
+      `/solutions reads correctly in the ${theme} theme`,
+      seen.attr === theme &&
+        seen.bg === toRgb(colorTokens['surface-base'][theme]) &&
+        seen.heading === toRgb(colorTokens.primary[theme]) &&
+        seen.tagline === toRgb(colorTokens['accent-text'][theme]) &&
+        seen.inverted === 2,
+      `body ${seen.bg}, entry heading ${seen.heading}, tagline ${seen.tagline} ` +
+        `(accent-text=${toRgb(colorTokens['accent-text'][theme])}), ${seen.inverted} inverted scope(s)`,
+    );
+  }
+
+  // ------------------------------------------------- HOMEPAGE PROOF STEP --
+  console.log('\nHOMEPAGE PROOF STEP');
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+  await client.goto(ORIGIN + '/');
+  await wait(400);
+  const preview = await client.eval(`(() => {
+    const heading = document.getElementById('solutions-preview-heading');
+    const section = heading ? heading.closest('section') : null;
+    const items = section ? [...section.querySelectorAll('li')] : [];
+    return {
+      found: !!section,
+      count: items.length,
+      names: items.map(i => i.querySelector('h3')?.textContent.trim()),
+      hasBody: items.every(i => i.textContent.trim().length > 120),
+      linksToSolutions: section
+        ? [...section.querySelectorAll('a')].some(a => a.getAttribute('href') === '/solutions')
+        : false,
+      inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+      previewInverted: section ? section.hasAttribute('data-surface') : null,
+    };
+  })()`);
+  check(
+    'The homepage carries a proof step reading two solutions, linking to /solutions',
+    preview.found && preview.count === 2 && preview.hasBody && preview.linksToSolutions,
+    `${preview.count} entries (${preview.names.join(', ')}), links to /solutions=${preview.linksToSolutions}`,
+  );
+  check(
+    'The preview is not hardcoded: its names match what /solutions renders',
+    JSON.stringify(preview.names) === JSON.stringify(solutions.names.slice(0, 2)),
+    `homepage ${JSON.stringify(preview.names)} vs /solutions ${JSON.stringify(solutions.names.slice(0, 2))}`,
+  );
+  check(
+    'The homepage now has three inverted scopes, with the proof step between the last two',
+    preview.inverted === 3 && preview.previewInverted === false,
+    `${preview.inverted} inverted scope(s) (want 3); the preview itself is inverted=${preview.previewInverted}`,
+  );
+
+  // ----------------------------------------------------------- WORK GONE --
+  console.log('\nWORK REMOVED');
+  const workRedirect = await (await fetch(ORIGIN + '/work', { redirect: 'manual' })).status;
+  const workFollowed = await fetch(ORIGIN + '/work');
+  check(
+    '/work redirects permanently to /solutions rather than 404ing',
+    (workRedirect === 308 || workRedirect === 301) &&
+      new URL(workFollowed.url).pathname === '/solutions',
+    `HTTP ${workRedirect}, follows to ${new URL(workFollowed.url).pathname}`,
+  );
+
+  const workLinks = [];
+  for (const route of ['/', '/services', '/solutions', '/about', '/contact', '/start']) {
+    await client.goto(ORIGIN + route);
+    await wait(250);
+    const found = await client.eval(`(() => {
+      const links = [...document.querySelectorAll('a[href]')]
+        .map(a => a.getAttribute('href'))
+        .filter(h => h === '/work' || h.startsWith('/work/') || h.startsWith('/work?'));
+      // The primary list only: the header also holds the wordmark and the CTA,
+      // neither of which is navigation.
+      const navLabels = [...document.querySelectorAll('header nav ul a')].map(a => a.textContent.trim());
+      return { links, navLabels };
+    })()`);
+    if (found.links.length) workLinks.push(`${route}: ${found.links.join(', ')}`);
+    if (route === '/') {
+      check(
+        'Primary navigation is Home, Services, Solutions, About — Work is gone',
+        JSON.stringify(found.navLabels) ===
+          JSON.stringify(['Home', 'Services', 'Solutions', 'About']),
+        `nav reads ${JSON.stringify(found.navLabels)}`,
+      );
+    }
+  }
+  check(
+    'No internal link anywhere points at /work',
+    workLinks.length === 0,
+    workLinks.length
+      ? workLinks.join(' | ')
+      : '6 routes checked, including every footer link',
+  );
 } finally {
   try {
     client?.ws.close();

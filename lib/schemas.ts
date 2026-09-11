@@ -18,6 +18,9 @@
  * forms render live in lib/form-options.ts, which carries no zod at all.
  */
 import {
+  array,
+  number,
+  url,
   email as zEmail,
   enum as zEnum,
   literal,
@@ -111,6 +114,42 @@ export const contactSchema = object({
   preferredContact: preferredContactField,
   website: honeypotField,
 });
+
+/*
+ * Solution frontmatter. Parsed and validated at BUILD time — see lib/solutions.ts
+ * — so this never reaches a browser at all, which is the strongest form of the
+ * load-on-demand rule in CLAUDE.md 6.
+ */
+export const solutionFrontmatterSchema = object({
+  name: string().check(trim(), minLength(1, 'name is required')),
+  tagline: string().check(trim(), minLength(1, 'tagline is required')),
+  problem: string().check(trim(), minLength(40, 'problem must say what is actually wrong')),
+  description: string().check(
+    trim(),
+    minLength(40, 'description must say what the product does'),
+  ),
+  technologies: array(string().check(trim(), minLength(1))).check(
+    minLength(1, 'list at least one technology'),
+  ),
+  capabilities: optional(array(string().check(trim(), minLength(1)))),
+  status: string().check(trim(), minLength(1, 'status is required')),
+  order: number(),
+  /*
+   * Optional on purpose. Domains are not live yet, and an entry has to render
+   * complete without one — the link simply appears when a value is added, with
+   * no component change. An empty string is rejected rather than quietly
+   * rendering a link to nowhere.
+   */
+  publicUrl: optional(
+    string().check(
+      trim(),
+      minLength(1, 'publicUrl must be a URL or absent, never empty'),
+      url('publicUrl must be a full URL'),
+    ),
+  ),
+});
+
+export type SolutionFrontmatter = Infer<typeof solutionFrontmatterSchema>;
 
 export type ContactInput = Infer<typeof contactSchema>;
 export type ContactDetails = Infer<typeof contactDetailsSchema>;
