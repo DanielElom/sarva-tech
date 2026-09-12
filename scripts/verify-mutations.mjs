@@ -281,8 +281,14 @@ const MUTATIONS = [
     name: 'publicUrl link rendered even when absent',
     file: 'components/sections/solution-entries.tsx',
     find: '                {solution.publicUrl ? (',
-    replace: '                {true ? (',
-    artefact: '                {true ? (',
+    replace: "                {(solution.publicUrl ?? '#') ? (",
+    artefact: "(solution.publicUrl ?? '#') ?",
+    // The href needs the same fallback or the mutated file will not type-check,
+    // and a mutation that does not compile tests nothing.
+    also: {
+      find: '                    href={solution.publicUrl}',
+      replace: "                    href={solution.publicUrl ?? '#'}",
+    },
     expect: 'An entry without publicUrl renders complete',
   },
   {
@@ -571,7 +577,14 @@ function apply(mutation) {
       `${mutation.name}: anchor occurs ${occurrences} times in ${mutation.file}, expected exactly 1`,
     );
   }
-  writeFileSync(path, source.replace(mutation.find, mutation.replace));
+  let mutated = source.replace(mutation.find, mutation.replace);
+  if (mutation.also) {
+    if (mutated.split(mutation.also.find).length - 1 !== 1) {
+      throw new Error(`${mutation.name}: secondary anchor did not match exactly once`);
+    }
+    mutated = mutated.replace(mutation.also.find, mutation.also.replace);
+  }
+  writeFileSync(path, mutated);
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -671,7 +684,19 @@ try {
 
     if (buildFailed || timedOut) {
       undetected++;
-      const why = buildFailed ? '(mutation did not compile)' : '(suite timed out — inconclusive)';
+      // Show WHY it did not compile. "did not compile" alone sends you reading
+      // the mutation when the answer is usually one line of tsc output.
+      const reason = buildFailed
+        ? (output ?? '')
+            .split('\n')
+            .filter((l) => /error TS|Type error|Failed to compile|^\s*\.\/|Error:/.test(l))
+            .slice(0, 3)
+            .map((l) => l.trim())
+            .join(' | ')
+        : '';
+      const why = buildFailed
+        ? `(mutation did not compile) ${reason}`
+        : '(suite timed out — inconclusive)';
       results.push({ mutation, caught: false, failures: [why] });
       console.log(`  SKIP  ${mutation.name}\n          ${why}`);
       continue;
