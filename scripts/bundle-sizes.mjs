@@ -9,10 +9,10 @@
  * Usage: node scripts/bundle-sizes.mjs http://localhost:3000
  */
 import { gzipSync } from 'node:zlib';
-import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { createGuardedProfile } from './profile-guard.mjs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { tmpdir } from 'node:os';
 
 const origin = process.argv[2] ?? 'http://localhost:3000';
 const LIMIT_KB = 200;
@@ -81,7 +81,8 @@ const DEFERRED_LIMIT_KB = 50;
 const chromePath =
   process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-const profile = mkdtempSync(join(tmpdir(), 'sarva-deferred-'));
+const guard = createGuardedProfile('sarva-deferred-');
+const { profile } = guard;
 // Ephemeral port, for the same reason as scripts/verify-ui.mjs: an orphaned
 // Chrome holding a fixed port makes a later run drive the wrong browser.
 const chrome = spawn(chromePath, [
@@ -91,6 +92,7 @@ const chrome = spawn(chromePath, [
   `--user-data-dir=${profile}`,
   '--no-first-run',
 ]);
+guard.track(chrome);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let deferredFailures = 0;
@@ -192,14 +194,7 @@ try {
 
   ws.close();
 } finally {
-  chrome.kill();
-  // Same reason as scripts/verify-ui.mjs: an undeleted profile per run is what
-  // eventually filled the disk.
-  try {
-    rmSync(profile, { recursive: true, force: true });
-  } catch {
-    /* Chrome may still hold a handle; the OS reclaims it on reboot. */
-  }
+  await guard.release(chrome);
 }
 
 console.log('');

@@ -7,8 +7,8 @@
  * Usage: node scripts/verify-ui.mjs http://localhost:3210
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
+import { createGuardedProfile } from './profile-guard.mjs';
 import { join } from 'node:path';
 import { colorTokens } from '../lib/tokens.data.mjs';
 
@@ -167,7 +167,8 @@ function toRgb(hex) {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-const profile = mkdtempSync(join(tmpdir(), 'sarva-cdp-'));
+const guard = createGuardedProfile('sarva-cdp-');
+const { profile } = guard;
 /*
  * Port 0 means "pick a free one and write it to DevToolsActivePort". A fixed
  * port looked fine until an orphaned Chrome from a killed run kept holding it:
@@ -185,6 +186,7 @@ const chrome = spawn(CHROME, [
   '--disable-extensions',
   '--hide-scrollbars',
 ]);
+guard.track(chrome);
 
 let client;
 try {
@@ -2162,21 +2164,9 @@ try {
   } catch {
     /* already closed */
   }
-  chrome.kill();
-  /*
-   * Remove the throwaway Chrome profile.
-   *
-   * This suite ran hundreds of times across six sessions and left one profile
-   * behind every time. They are tens of megabytes each and they filled the disk,
-   * which then presented as builds failing for reasons that had nothing to do
-   * with the code. A temporary directory is only temporary if something deletes
-   * it.
-   */
-  try {
-    rmSync(profile, { recursive: true, force: true });
-  } catch {
-    /* Chrome may still hold a handle; the OS reclaims it on reboot. */
-  }
+  // Waits for Chrome to actually exit before removing, and retries. See
+  // scripts/profile-guard.mjs for why a plain rmSync here was not enough.
+  await guard.release(chrome);
 }
 
 const failed = results.filter((r) => !r.pass);
