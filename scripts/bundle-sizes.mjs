@@ -9,7 +9,7 @@
  * Usage: node scripts/bundle-sizes.mjs http://localhost:3000
  */
 import { gzipSync } from 'node:zlib';
-import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -45,7 +45,9 @@ const rows = [];
 for (const route of routes) {
   const response = await fetch(origin + route);
   const html = await response.text();
-  const assets = [...new Set([...html.matchAll(/\/_next\/static\/[^"'\s)]+?\.js/g)].map((m) => m[0]))];
+  const assets = [
+    ...new Set([...html.matchAll(/\/_next\/static\/[^"'\s)]+?\.js/g)].map((m) => m[0])),
+  ];
   const total = assets.reduce((sum, asset) => sum + gzippedSize(asset), 0);
   const kb = total / 1024;
   if (kb > LIMIT_KB) failures++;
@@ -77,8 +79,7 @@ console.log(
  */
 const DEFERRED_LIMIT_KB = 50;
 const chromePath =
-  process.env.CHROME_PATH ??
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const profile = mkdtempSync(join(tmpdir(), 'sarva-deferred-'));
 // Ephemeral port, for the same reason as scripts/verify-ui.mjs: an orphaned
@@ -98,7 +99,9 @@ try {
   for (let i = 0; i < 60 && !port; i++) {
     await sleep(200);
     try {
-      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split('\n')[0];
+      const line = readFileSync(join(profile, 'DevToolsActivePort'), 'utf-8').split(
+        '\n',
+      )[0];
       if (line?.trim()) port = Number(line.trim());
     } catch {
       /* not written yet */
@@ -190,6 +193,13 @@ try {
   ws.close();
 } finally {
   chrome.kill();
+  // Same reason as scripts/verify-ui.mjs: an undeleted profile per run is what
+  // eventually filled the disk.
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {
+    /* Chrome may still hold a handle; the OS reclaims it on reboot. */
+  }
 }
 
 console.log('');

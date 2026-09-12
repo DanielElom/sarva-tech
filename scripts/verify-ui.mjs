@@ -7,7 +7,7 @@
  * Usage: node scripts/verify-ui.mjs http://localhost:3210
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { colorTokens } from '../lib/tokens.data.mjs';
@@ -2163,6 +2163,20 @@ try {
     /* already closed */
   }
   chrome.kill();
+  /*
+   * Remove the throwaway Chrome profile.
+   *
+   * This suite ran hundreds of times across six sessions and left one profile
+   * behind every time. They are tens of megabytes each and they filled the disk,
+   * which then presented as builds failing for reasons that had nothing to do
+   * with the code. A temporary directory is only temporary if something deletes
+   * it.
+   */
+  try {
+    rmSync(profile, { recursive: true, force: true });
+  } catch {
+    /* Chrome may still hold a handle; the OS reclaims it on reboot. */
+  }
 }
 
 const failed = results.filter((r) => !r.pass);

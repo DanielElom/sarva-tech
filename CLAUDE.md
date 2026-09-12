@@ -393,3 +393,8 @@ assumptions, and confirmation of readiness for the next session without starting
 - Comparative performance measurements are interleaved, never consecutive blocks per
   subject. Report the median paired difference, not the difference of medians.
 - `.env.example` documents every variable the app reads and its fallback behaviour.
+- Assert the outcome a person would observe, not that the mechanism executed. The hero
+  animation ran at 60fps with every gate correct and moved nodes 5 pixels per minute; the
+  check asserted the frame counter was advancing and passed on an invisible animation.
+  Where a change is visual, measure the visible change — pixels moved per second,
+  proportion of the frame redrawn — not that the code producing it ran.
