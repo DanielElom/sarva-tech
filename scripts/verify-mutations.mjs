@@ -598,10 +598,20 @@ async function runSuite(serverEnv = {}) {
     return { buildFailed: true, output: `${build.stdout ?? ''}${build.stderr ?? ''}` };
   }
 
+  /*
+   * The SERVER needs the mutation's environment too, not just the suite.
+   *
+   * This was missing and the failure was silent in the worst way: the suite saw
+   * SARVA_MAIL_BROKEN and ran the mail check, while the server it was checking
+   * still held the real Resend key. Mail succeeded, the route answered 201, the
+   * check passed — and the harness reported that a real defect went undetected.
+   * A check cannot catch a defect the running system does not have.
+   */
   const server = spawn('pnpm', ['exec', 'next', 'start', '-p', String(PORT)], {
     cwd: root,
     stdio: 'ignore',
     detached: true,
+    env: { ...process.env, ...serverEnv },
   });
   try {
     for (let i = 0; i < 60; i++) {
