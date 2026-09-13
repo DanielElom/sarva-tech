@@ -666,6 +666,19 @@ function failedChecks(output) {
     .map((line) => line.trim().replace(/^FAIL\s+/, ''));
 }
 
+/**
+ * How many checks reported at all, pass or fail.
+ *
+ * A suite that crashes prints nothing useful — Node discards buffered stdout on
+ * an uncaught exception — and the harness then sees no failures and calls the
+ * mutation undetected. That is indistinguishable from a genuinely missed defect
+ * and it has now sent me chasing working checks twice. Zero reported checks
+ * means the run did not happen, which is inconclusive, not a pass.
+ */
+function reportedChecks(output) {
+  return output.split('\n').filter((line) => /^\s+(ok|FAIL)\s{2}/.test(line)).length;
+}
+
 let undetected = 0;
 const results = [];
 console.log('\nMUTATION TESTING — each check run against the defect it exists to catch\n');
@@ -708,6 +721,15 @@ try {
         ? `(mutation did not compile) ${reason}`
         : '(suite timed out — inconclusive)';
       results.push({ mutation, caught: false, failures: [why] });
+      console.log(`  SKIP  ${mutation.name}\n          ${why}`);
+      continue;
+    }
+
+    const reported = reportedChecks(output);
+    if (reported === 0) {
+      undetected++;
+      const why = '(suite reported no checks at all — inconclusive, not a pass)';
+      results.push({ mutation, caught: false, skipped: true, failures: [why] });
       console.log(`  SKIP  ${mutation.name}\n          ${why}`);
       continue;
     }
