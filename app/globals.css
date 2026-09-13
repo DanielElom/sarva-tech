@@ -344,13 +344,24 @@
     padding-left: 1.25rem;
   }
 
+  /*
+   * Inline links in running prose are underlined ALWAYS, not on hover.
+   *
+   * Lighthouse caught this and the project's own a11y sweep did not: a link
+   * sitting inside a paragraph of text was distinguishable from that text by
+   * colour alone, which is WCAG 1.4.1. Hover is not a substitute — it does not
+   * exist on touch, and it does not help someone who cannot separate the two
+   * hues in the first place. Elsewhere on the site links are their own block or
+   * carry a button treatment, so this is specific to the legal prose.
+   */
   .legal a {
     color: var(--color-accent-text);
+    text-decoration: underline;
     text-underline-offset: 4px;
   }
 
   .legal a:hover {
-    text-decoration: underline;
+    text-decoration-thickness: 2px;
   }
 
   /* The single elevation treatment. One, not a ladder. */

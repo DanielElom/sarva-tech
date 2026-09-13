@@ -2720,6 +2720,45 @@ try {
     a11yProblems.lang.length ? a11yProblems.lang.join(' | ') : 'lang="en"',
   );
 
+
+  // A link sitting inside a paragraph of running text must be distinguishable
+  // from that text by something other than colour (WCAG 1.4.1). Lighthouse
+  // found this on /privacy and /terms when the sweep above did not: the sweep
+  // checked that links had accessible names and visible focus, and never asked
+  // how a reader spots one mid-sentence. Hover does not count — it does not
+  // exist on touch.
+  const colourOnlyLinks = [];
+  for (const route of SEO_ROUTES) {
+    await client.goto(ORIGIN + route);
+    await wait(250);
+    const found = await client.eval(`(() => {
+      const out = [];
+      for (const a of document.querySelectorAll('main a[href]')) {
+        const p = a.closest('p, li');
+        if (!p) continue;
+        // Only links with sibling text around them: a link alone in its own
+        // paragraph reads as a call to action, not as an inline link.
+        const siblingText = p.textContent.replace(a.textContent, '').trim();
+        if (siblingText.length < 10) continue;
+        const style = getComputedStyle(a);
+        const decorated =
+          style.textDecorationLine.includes('underline') ||
+          style.borderBottomWidth !== '0px' ||
+          parseFloat(style.fontWeight) >= 600;
+        if (!decorated) out.push(a.textContent.trim().slice(0, 34));
+      }
+      return out;
+    })()`);
+    if (found.length) colourOnlyLinks.push(`${route}: ${found.join(', ')}`);
+  }
+  check(
+    'No inline link is distinguished from its surrounding text by colour alone',
+    colourOnlyLinks.length === 0,
+    colourOnlyLinks.length
+      ? colourOnlyLinks.join(' | ')
+      : `${SEO_ROUTES.length} routes, every inline link underlined`,
+  );
+
   // Focus visibility, measured rather than assumed: tab to the first control
   // on each new route and confirm the computed outline actually changes.
   const focusProblems = [];

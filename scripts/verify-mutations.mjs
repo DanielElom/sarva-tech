@@ -630,6 +630,24 @@ const MUTATIONS = [
     artefact: 'lang=""',
     expect: ['The document language is declared on every route'],
   },
+  {
+    name: 'Inline legal links go back to colour-only, underlined on hover',
+    file: 'app/globals.css',
+    find: `  .legal a {
+    color: var(--color-accent-text);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }`,
+    replace: `  .legal a {
+    color: var(--color-accent-text);
+    text-underline-offset: 4px;
+  }`,
+    artefact: `  .legal a {
+    color: var(--color-accent-text);
+    text-underline-offset: 4px;
+  }`,
+    expect: ['No inline link is distinguished from its surrounding text by colour alone'],
+  },
 ];
 
 /**
