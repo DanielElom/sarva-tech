@@ -110,6 +110,45 @@ export const SITE = {
   url: resolveSiteUrl(),
 } as const;
 
+/**
+ * The date the legal pages were last substantively changed.
+ *
+ * Deliberately a constant and NOT generated at build time. A policy that
+ * re-dates itself on every deploy claims it was reviewed when it was not, which
+ * is the one thing a "last updated" line exists to tell you. Move this by hand
+ * when the wording actually changes.
+ */
+export const LEGAL_UPDATED = '13 September 2026';
+
+/**
+ * Every indexable route, in one place.
+ *
+ * This is the list the sitemap is generated from and the list the verification
+ * suite iterates when it asserts that each route has a unique title, a unique
+ * description and a self-referencing canonical. Both jobs reading the same array
+ * is the point: a route added to the site without being added here shows up as a
+ * sitemap omission, and a route added here without a page shows up as a 404 in
+ * the suite. Neither can pass quietly.
+ *
+ * `changeFrequency` and `priority` are advisory at best — search engines have
+ * said for years that they largely ignore them — so they are set to reflect how
+ * often each page genuinely changes rather than to petition for crawl budget.
+ */
+export const INDEXABLE_ROUTES: readonly {
+  path: string;
+  changeFrequency: 'monthly' | 'yearly';
+  priority: number;
+}[] = [
+  { path: '/', changeFrequency: 'monthly', priority: 1 },
+  { path: '/services', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/solutions', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/about', changeFrequency: 'monthly', priority: 0.6 },
+  { path: '/start', changeFrequency: 'monthly', priority: 0.9 },
+  { path: '/contact', changeFrequency: 'yearly', priority: 0.5 },
+  { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
+  { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },
+];
+
 export type NavLink = { href: string; label: string };
 
 /**

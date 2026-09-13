@@ -24,7 +24,7 @@ export function Container({
 } & Omit<ComponentPropsWithoutRef<'div'>, 'children' | 'className'>) {
   const Element = Tag as ElementType;
   return (
-    <Element className={cn('mx-auto w-full max-w-page px-gutter', className)} {...rest}>
+    <Element className={cn('max-w-page px-gutter mx-auto w-full', className)} {...rest}>
       {children}
     </Element>
   );

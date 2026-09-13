@@ -103,7 +103,7 @@ export function ProblemFirst() {
           <h2 id={`${baseId}-heading`} className="text-h2">
             Start with the problem.
           </h2>
-          <p className="mt-5 text-lead text-muted">
+          <p className="text-lead text-muted mt-5">
             Most projects begin with a solution already chosen. &ldquo;We need an
             app.&rdquo; &ldquo;We need a dashboard.&rdquo; Sometimes that&rsquo;s right.
             Often it isn&rsquo;t, and nobody finds out until the money is spent.
@@ -151,7 +151,9 @@ export function ProblemFirst() {
                   >
                     {String(index + 1).padStart(2, '0')}
                   </span>
-                  <span className="font-display text-h4 tracking-heading">{stage.title}</span>
+                  <span className="font-display text-h4 tracking-heading">
+                    {stage.title}
+                  </span>
                 </button>
               );
             })}

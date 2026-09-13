@@ -314,15 +314,15 @@ Footer copyright year is generated at build time, never typed.
 
 ## 12. Sessions
 
-| Session | Scope                                                                                                            | Status      |
-| ------- | ---------------------------------------------------------------------------------------------------------------- | ----------- |
-| S1      | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | complete    |
-| S2      | Homepage part 1: hero + interactive visual, what we do, problem-first section                                    | complete    |
-| S3      | Homepage part 2: why Sarva Tech, technology ecosystem                                                            | complete    |
-| S4      | /services: the five categories in detail, ecosystem map                                                          | complete    |
-| S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                              | complete    |
-| S6      | Content layer: MDX solutions, /solutions, homepage proof section, /work removed                                  | complete    |
-| S7      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                 | not started |
+| Session | Scope                                                                                                            | Status   |
+| ------- | ---------------------------------------------------------------------------------------------------------------- | -------- |
+| S1      | Foundation: tokens, themes, type, motion primitives, nav, footer, route skeleton, health endpoint, Vercel deploy | complete |
+| S2      | Homepage part 1: hero + interactive visual, what we do, problem-first section                                    | complete |
+| S3      | Homepage part 2: why Sarva Tech, technology ecosystem                                                            | complete |
+| S4      | /services: the five categories in detail, ecosystem map                                                          | complete |
+| S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                              | complete |
+| S6      | Content layer: MDX solutions, /solutions, homepage proof section, /work removed                                  | complete |
+| S7      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                 | complete |
 
 The conversion footer was built in S1, so S3 no longer included it.
 
@@ -362,7 +362,8 @@ assumptions, and confirmation of readiness for the next session without starting
 - [ ] Privacy policy written, personal data collection disclosed
 - [ ] Terms of service written
 - [ ] Real logo replaces the wordmark, or the wordmark is confirmed as final
-- [ ] Four case studies published with client permission confirmed for each named client
+- [ ] Both solutions published, details confirmed accurate, no launch dates or
+      unverifiable claims in public copy
 - [ ] Lighthouse mobile ≥ 90 on every route
 - [ ] Both themes audited on a real Android device, not just a desktop emulator
 - [ ] Reduced-motion pass on every page
@@ -393,6 +394,19 @@ assumptions, and confirmation of readiness for the next session without starting
 - Comparative performance measurements are interleaved, never consecutive blocks per
   subject. Report the median paired difference, not the difference of medians.
 - `.env.example` documents every variable the app reads and its fallback behaviour.
+- Assert PRESENCE as well as uniqueness. "Every route has a distinct og:image"
+  passes vacuously when the tag is missing from all of them, which is exactly
+  how the homepage shipped without one while its image route happily returned a
+  valid PNG. Check that the thing exists, then that the values differ.
+- Read metadata out of the rendered HTML, never out of the config that produces
+  it. Next shallow-merges `metadata`: every route set its own `title` and every
+  route still emitted the homepage's `og:title`, because the root's `openGraph`
+  object won. The config looked correct and the page source did not.
+- A metadata file convention (`opengraph-image.tsx`) only applies to the route
+  segment it sits in. A child segment that declares its own `openGraph` does not
+  inherit the parent segment's image, so the file has to live beside the page
+  whose metadata it belongs to.
+
 - Assert the outcome a person would observe, not that the mechanism executed. The hero
   animation ran at 60fps with every gate correct and moved nodes 5 pixels per minute; the
   check asserted the frame counter was advancing and passed on an invisible animation.

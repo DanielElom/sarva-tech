@@ -17,8 +17,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  * client is the only path in.
  */
 export type SupabaseConfigState =
-  | { configured: true; client: SupabaseClient }
-  | { configured: false; reason: string };
+  { configured: true; client: SupabaseClient } | { configured: false; reason: string };
 
 let cached: SupabaseClient | null = null;
 

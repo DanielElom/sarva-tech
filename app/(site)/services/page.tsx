@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/metadata';
 import { Container } from '@/components/ui/container';
 import { ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -6,12 +7,12 @@ import { ServicesEcosystem } from '@/components/sections/services-ecosystem';
 import { ServiceDetail } from '@/components/sections/service-detail';
 import { PRIMARY_CTA } from '@/lib/site';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  route: '/services',
   title: 'Services',
   description:
     'Product development, technology strategy, rescue and optimization, digital infrastructure, and technology talent — what each one solves, what we deliver, and what you end up with.',
-  alternates: { canonical: '/services' },
-};
+});
 
 /**
  * Surface rhythm: N I N N I.

@@ -301,6 +301,58 @@
     color: var(--color-accent-text);
   }
 
+  /*
+   * Legal documents. Privacy and terms are long, structured, and read rather
+   * than scanned, so they get their own rhythm instead of every paragraph
+   * carrying the same four utility classes.
+   *
+   * No monospace and no tracked caps anywhere in here: a policy is body copy,
+   * not instrumentation (CLAUDE.md 4.6).
+   */
+  .legal {
+    max-width: var(--container-measure);
+  }
+
+  .legal h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-h4);
+    line-height: var(--leading-heading);
+    letter-spacing: var(--tracking-heading);
+    margin-top: 3rem;
+  }
+
+  .legal h3 {
+    font-size: var(--text-body);
+    font-weight: 600;
+    margin-top: 1.75rem;
+  }
+
+  .legal p,
+  .legal ul {
+    color: var(--color-muted);
+    line-height: var(--leading-body);
+    margin-top: 1rem;
+  }
+
+  .legal li {
+    margin-top: 0.5rem;
+    padding-left: 0.25rem;
+  }
+
+  .legal ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+
+  .legal a {
+    color: var(--color-accent-text);
+    text-underline-offset: 4px;
+  }
+
+  .legal a:hover {
+    text-decoration: underline;
+  }
+
   /* The single elevation treatment. One, not a ladder. */
   .elevated {
     background-color: var(--color-surface-raised);

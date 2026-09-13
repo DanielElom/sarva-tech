@@ -25,15 +25,15 @@ export function Hero() {
             template chrome. It reads as an eyebrow through size, weight and
             colour instead.
           */}
-          <p className="font-display text-sm font-medium text-accent-text">
+          <p className="font-display text-accent-text text-sm font-medium">
             Technology solutions for the real world
           </p>
 
-          <h1 className="mt-5 text-display leading-display tracking-display">
+          <h1 className="text-display leading-display tracking-display mt-5">
             We Build Technology That Solves Real Problems.
           </h1>
 
-          <p className="measure mt-6 text-lead text-muted">
+          <p className="measure text-lead text-muted mt-6">
             From ideas to intelligent digital products, Sarva Tech helps businesses and
             organizations turn complex problems into practical technology solutions.
           </p>

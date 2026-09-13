@@ -51,7 +51,7 @@ export function WhatWeDo() {
         <h2 id="what-we-do-heading" className="text-h2">
           Most technology creates work. Ours removes it.
         </h2>
-        <p className="mt-5 text-lead text-muted">
+        <p className="text-lead text-muted mt-5">
           We work across the whole lifecycle, from the first conversation about what&rsquo;s
           actually broken through to the system running in production and getting better.
         </p>
@@ -60,13 +60,13 @@ export function WhatWeDo() {
       <ul className="mt-14 grid gap-x-10 gap-y-10 md:grid-cols-2 lg:grid-cols-3 lg:grid-rows-2">
         <li className="elevated rounded-lg p-7 md:col-span-2 lg:col-span-1 lg:row-span-2 lg:flex lg:flex-col lg:justify-center">
           <h3 className="text-h3">{LEAD.title}</h3>
-          <p className="mt-4 text-muted">{LEAD.body}</p>
+          <p className="text-muted mt-4">{LEAD.body}</p>
         </li>
 
         {REST.map((item) => (
-          <li key={item.title} className="border-t border-line pt-6">
+          <li key={item.title} className="border-line border-t pt-6">
             <h3 className="text-h4">{item.title}</h3>
-            <p className="mt-3 text-muted">{item.body}</p>
+            <p className="text-muted mt-3">{item.body}</p>
           </li>
         ))}
       </ul>

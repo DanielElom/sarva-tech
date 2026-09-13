@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/metadata';
 import { Container } from '@/components/ui/container';
 import { ButtonLink } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -6,12 +7,12 @@ import { SolutionEntries } from '@/components/sections/solution-entries';
 import { getSolutions } from '@/lib/solutions';
 import { PRIMARY_CTA } from '@/lib/site';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  route: '/solutions',
   title: 'Solutions',
   description:
     'Sarva Tech builds its own products, not only client work. Sarva Logistics and Lumen Market — what each one solves, what it does, and what it is built with.',
-  alternates: { canonical: '/solutions' },
-};
+});
 
 /**
  * Surface rhythm: N N I. One inverted band, the closing CTA, which is far

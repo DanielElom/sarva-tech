@@ -1,16 +1,17 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/metadata';
 import { Container } from '@/components/ui/container';
 import { PageHeader } from '@/components/ui/page-header';
 import { ButtonLink } from '@/components/ui/button';
 import { ContactForm } from '@/components/sections/contact-form';
 import { CONTACT, PRIMARY_CTA } from '@/lib/site';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  route: '/contact',
   title: 'Contact Us',
   description:
     'Have a problem, an idea, or a product that needs to become real? Message Sarva Tech on WhatsApp, or send us a note.',
-  alternates: { canonical: '/contact' },
-};
+});
 
 /**
  * CLAUDE.md 9 and 11.
@@ -64,7 +65,12 @@ export default function ContactPage() {
               Anything we should know before replying. If you would rather answer questions
               than write from scratch, the intake asks them for you.
             </p>
-            <ButtonLink href={PRIMARY_CTA.href} variant="secondary" size="sm" className="mt-6">
+            <ButtonLink
+              href={PRIMARY_CTA.href}
+              variant="secondary"
+              size="sm"
+              className="mt-6"
+            >
               {PRIMARY_CTA.label}
             </ButtonLink>
             <p className="text-muted mt-8 text-sm">

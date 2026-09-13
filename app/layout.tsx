@@ -3,6 +3,7 @@ import { Space_Grotesk, Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeScript } from '@/components/chrome/theme-script';
 import { color } from '@/lib/tokens';
 import { SITE } from '@/lib/site';
+import { OrganizationSchema } from '@/components/chrome/structured-data';
 import './globals.css';
 
 /**
@@ -48,9 +49,23 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     title: `${SITE.name} — Technology that solves problems`,
     description: SITE.description,
-    url: SITE.url,
+    // No `url` here on purpose. A literal value at the root is inherited by
+    // every route, so each page would advertise the homepage as its canonical
+    // social URL. Next derives og:url from the route's own canonical instead.
   },
-  robots: { index: true, follow: true },
+  // The homepage's own canonical. Every other route sets its own, relative to
+  // metadataBase. Without this the root resolves to no canonical at all.
+  alternates: { canonical: '/' },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE.name} — Technology that solves problems`,
+    description: SITE.description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
+  },
   // Generated from the tokens by scripts/generate-tokens.mjs.
   icons: { icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }] },
 };
@@ -75,6 +90,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <ThemeScript />
+        <OrganizationSchema />
       </head>
       <body>{children}</body>
     </html>

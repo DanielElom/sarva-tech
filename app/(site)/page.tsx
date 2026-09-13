@@ -1,9 +1,23 @@
+import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/metadata';
+import { SITE } from '@/lib/site';
 import { Hero } from '@/components/sections/hero';
 import { WhatWeDo } from '@/components/sections/what-we-do';
 import { ProblemFirst } from '@/components/sections/problem-first';
 import { WhySarvaTech } from '@/components/sections/why-sarva-tech';
 import { TechnologyEcosystem } from '@/components/sections/technology-ecosystem';
 import { SolutionsPreview } from '@/components/sections/solutions-preview';
+
+/**
+ * The one route whose <title> is not templated — "Home — Sarva Tech" would be
+ * a worse result than the company name in a search listing.
+ */
+export const metadata: Metadata = pageMetadata({
+  route: '/',
+  title: 'Home',
+  absoluteTitle: `${SITE.name} — Technology that solves problems`,
+  description: SITE.description,
+});
 
 /**
  * Homepage. CLAUDE.md 1: problem -> why Sarva Tech exists -> what we solve ->

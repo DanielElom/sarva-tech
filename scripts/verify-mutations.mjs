@@ -433,6 +433,203 @@ const MUTATIONS = [
     artefact: null, // an absence, not a string; caught by byte-comparison
     expect: 'The stages section is itself inverted',
   },
+  // ------------------------------------------------------------------ S7 --
+  {
+    name: 'og:url dropped from every route',
+    file: 'lib/metadata.ts',
+    find: '      url: route,',
+    replace: '      // url removed',
+    artefact: '      // url removed',
+    expect: ['Every route has a ogUrl', 'og:url agrees with the canonical'],
+  },
+  {
+    name: 'The shallow-merge trap: every card carries the homepage og:title',
+    file: 'lib/metadata.ts',
+    find: `    openGraph: {
+      type: 'website',
+      siteName: SITE.name,
+      title: qualified,`,
+    replace: `    openGraph: {
+      type: 'website',
+      siteName: SITE.name,
+      title: 'Sarva Tech — Technology that solves problems',`,
+    artefact: "title: 'Sarva Tech — Technology that solves problems',\n      description",
+    expect: ['No route inherits the homepage og:title', 'Every route has a ogTitle'],
+  },
+  {
+    name: 'Canonical removed from every route',
+    file: 'lib/metadata.ts',
+    find: '    alternates: { canonical: route },',
+    replace: '    // alternates removed',
+    artefact: '    // alternates removed',
+    expect: ['Every route has a canonical'],
+  },
+  {
+    name: 'Canonical points every route at the homepage',
+    file: 'lib/metadata.ts',
+    find: '    alternates: { canonical: route },',
+    replace: "    alternates: { canonical: '/' },",
+    artefact: "alternates: { canonical: '/' },",
+    expect: ['Every canonical points at the route it is on'],
+  },
+  {
+    name: 'Twitter card downgraded and its image dropped',
+    file: 'lib/metadata.ts',
+    find: `    twitter: {
+      card: 'summary_large_image',`,
+    replace: `    twitter: {
+      card: 'summary',`,
+    artefact: "card: 'summary',",
+    expect: ['Every route declares a summary_large_image Twitter card'],
+  },
+  {
+    name: 'OG images generated at the wrong size',
+    file: 'lib/og.tsx',
+    find: 'export const OG_SIZE = { width: 1200, height: 630 } as const;',
+    replace: 'export const OG_SIZE = { width: 1000, height: 525 } as const;',
+    artefact: 'width: 1000, height: 525',
+    expect: ['Every og:image fetches as a real 1200x630 PNG'],
+  },
+  {
+    name: 'Sitemap advertises /work, which permanently redirects',
+    file: 'app/sitemap.ts',
+    find: '  return INDEXABLE_ROUTES.map((route) => ({',
+    replace: `  const extra = [{ path: '/work', changeFrequency: 'monthly', priority: 0.5 }];
+  return [...INDEXABLE_ROUTES, ...extra].map((route) => ({`,
+    artefact: "path: '/work'",
+    expect: [
+      'The sitemap does not advertise /work',
+      'sitemap.xml is reachable and lists exactly the indexable routes',
+      'Every URL in the sitemap returns 200 without redirecting',
+    ],
+  },
+  {
+    name: 'A route silently missing from the sitemap',
+    file: 'app/sitemap.ts',
+    find: '  return INDEXABLE_ROUTES.map((route) => ({',
+    replace: "  return INDEXABLE_ROUTES.filter((r) => r.path !== '/about').map((route) => ({",
+    artefact: "filter((r) => r.path !== '/about')",
+    expect: ['sitemap.xml is reachable and lists exactly the indexable routes'],
+  },
+  {
+    name: 'robots.txt blocks the whole site',
+    file: 'app/robots.ts',
+    find: "    rules: [{ userAgent: '*', allow: '/', disallow: '/api/' }],",
+    replace: "    rules: [{ userAgent: '*', disallow: '/' }],",
+    artefact: "rules: [{ userAgent: '*', disallow: '/' }],",
+    expect: ['robots.txt allows the site, disallows /api/, and points at the sitemap'],
+  },
+  {
+    name: 'JSON-LD padded with a founding date and a social profile',
+    file: 'components/chrome/structured-data.tsx',
+    find: "    slogan: SITE.tagline,",
+    replace: `    slogan: SITE.tagline,
+    foundingDate: '2023-01-01',
+    sameAs: ['https://twitter.com/sarvatech'],`,
+    artefact: "foundingDate: '2023-01-01'",
+    expect: ['The JSON-LD claims nothing Sarva Tech cannot currently prove'],
+  },
+  {
+    name: 'JSON-LD contact point points at a number that does not exist',
+    file: 'components/chrome/structured-data.tsx',
+    find: '        telephone: CONTACT.whatsappNumber,',
+    replace: "        telephone: '+234 800 000 0000',",
+    artefact: "telephone: '+234 800 000 0000',",
+    expect: ['The one contact point in the JSON-LD is the WhatsApp number that exists'],
+  },
+  {
+    name: 'Structured data removed entirely',
+    file: 'components/chrome/structured-data.tsx',
+    find: '  return (\n    <script',
+    replace: '  if (json) return null;\n  return (\n    <script',
+    artefact: 'if (json) return null;',
+    expect: ['Organization JSON-LD is on every route'],
+  },
+  {
+    name: '/about hardcodes one product instead of reading the MDX',
+    file: 'app/(site)/about/page.tsx',
+    find: '  const names = getSolutions().map((solution) => solution.name);',
+    replace: "  const names = ['Sarva Logistics'];\n  void getSolutions;",
+    artefact: "const names = ['Sarva Logistics'];",
+    expect: ['/about names the real products, read from the MDX rather than typed in'],
+  },
+  {
+    name: '/about invents a track record',
+    file: 'app/(site)/about/page.tsx',
+    find: '        intro="Sarva Tech exists to make technology practical. Most of it is not."',
+    replace:
+      '        intro="Founded in 2021, Sarva Tech has delivered 40+ projects across Africa."',
+    artefact: 'Founded in 2021',
+    expect: ['/about invents nothing: no team, no founding date, no office, no statistics'],
+  },
+  {
+    name: '/about promises a launch date',
+    file: 'app/(site)/about/page.tsx',
+    find: '            solving something specific and sharing what they sensibly can.',
+    replace: '            solving something specific. Three more are launching soon.',
+    artefact: 'Three more are launching soon.',
+    expect: ['No route promises a launch date or timeframe'],
+  },
+  {
+    name: '/privacy claims cookies the site does not set',
+    file: 'app/(site)/privacy/page.tsx',
+    find: '            No cookies are set. Two things are kept in your browser&rsquo;s own storage,',
+    replace:
+      '            We use cookies to improve your experience. Two things are kept in your browser&rsquo;s own storage,',
+    artefact: 'We use cookies to improve your experience.',
+    expect: ['/privacy states there are no cookies'],
+  },
+  {
+    name: '/privacy stops naming the email processor',
+    file: 'app/(site)/privacy/page.tsx',
+    find: '              <strong>Resend</strong> sends us a notification email so we see that you got',
+    replace:
+      '              <strong>Our mail provider</strong> sends us a notification so we see that you got',
+    artefact: '<strong>Our mail provider</strong>',
+    expect: ['/privacy names the three processors that actually handle the data'],
+  },
+  {
+    name: '/terms promises an uptime guarantee nobody agreed to',
+    file: 'app/(site)/terms/page.tsx',
+    find: '            The site is provided as it is. We do not promise that it will be available',
+    replace:
+      '            We guarantee 99.9% uptime under our service level agreement. We promise it will be available',
+    artefact: 'We guarantee 99.9% uptime',
+    expect: ['/terms promises no service level nobody agreed to'],
+  },
+  {
+    name: 'The /start step counter goes back to the readout treatment',
+    file: 'components/sections/intake-flow.tsx',
+    find: '          <p className="text-muted text-sm">\n            Step {step + 1} of {TOTAL_STEPS}',
+    replace:
+      '          <p className="readout text-muted text-sm">\n            Step {step + 1} of {TOTAL_STEPS}',
+    artefact: 'className="readout text-muted text-sm"',
+    expect: [
+      'The /start step counter is body copy, not the readout treatment',
+      'Nothing on /start uses monospace at all',
+    ],
+  },
+  {
+    name: '/about skips a heading level',
+    file: 'app/(site)/about/page.tsx',
+    find: '          <h2 id="about-friction" className="text-h3">',
+    replace: '          <h4 id="about-friction" className="text-h3">',
+    artefact: '<h4 id="about-friction"',
+    also: {
+      find: '            </h2>\n            <p className="text-lead mt-4">\n              Most problems brought to a technology company',
+      replace:
+        '            </h4>\n            <p className="text-lead mt-4">\n              Most problems brought to a technology company',
+    },
+    expect: ['Every route has exactly one h1 and skips no heading level'],
+  },
+  {
+    name: 'The document loses its language declaration',
+    file: 'app/layout.tsx',
+    find: '      lang="en"',
+    replace: '      lang=""',
+    artefact: 'lang=""',
+    expect: ['The document language is declared on every route'],
+  },
 ];
 
 /**
@@ -735,13 +932,24 @@ try {
     }
 
     const failures = failedChecks(output);
-    const caught = failures.some((name) => name.includes(mutation.expect));
+    /*
+     * `expect` may name more than one check. A single well-aimed defect often
+     * has to be caught by several assertions — removing og:url must trip both
+     * "every route has one" and "it agrees with the canonical" — and listing
+     * them individually is what proves each of those is load-bearing rather
+     * than riding on its neighbour. ALL of them must fail, not any.
+     */
+    const expected = Array.isArray(mutation.expect) ? mutation.expect : [mutation.expect];
+    const unfired = expected.filter((want) => !failures.some((name) => name.includes(want)));
+    const caught = unfired.length === 0;
     if (!caught) undetected++;
     results.push({ mutation, caught, failures, skipped: false });
 
     console.log(`  ${caught ? 'ok  ' : 'FAIL'}  ${mutation.name}`);
     console.log(
-      `          target check "${mutation.expect}" — ${caught ? 'FAILED as intended' : 'DID NOT FAIL'}`,
+      `          ${expected.length} target check(s) — ${
+        caught ? 'all FAILED as intended' : 'DID NOT FAIL: ' + unfired.join(' ; ')
+      }`,
     );
     console.log(
       `          ${failures.length} check(s) failed: ${failures.map((f) => f.slice(0, 52)).join(' | ') || 'none'}`,

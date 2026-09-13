@@ -2158,6 +2158,629 @@ try {
       ? workLinks.join(' | ')
       : '6 routes checked, including every footer link',
   );
+
+  // ------------------------------------------------------------------ SEO --
+  //
+  // Read from the rendered HTML, never from the metadata source. The bug this
+  // suite exists to catch was invisible in the config: every route set its own
+  // `title`, and every route still emitted the homepage's `og:title`, because
+  // Next shallow-merges `openGraph` and the root's object won. The page source
+  // was the only place that said so.
+  //
+  // Note both PRESENCE and uniqueness are asserted. Uniqueness alone passes
+  // vacuously when a tag is missing everywhere, which is exactly the shape of
+  // the second bug found here — the homepage's og:image tag was absent while
+  // the image route itself happily returned a valid PNG.
+  console.log('\nSEO METADATA');
+
+  const SEO_ROUTES = [
+    '/',
+    '/services',
+    '/solutions',
+    '/about',
+    '/start',
+    '/contact',
+    '/privacy',
+    '/terms',
+  ];
+
+  const meta = (html, re) => {
+    const m = html.match(re);
+    return m ? m[1] : null;
+  };
+
+  const seo = [];
+  for (const route of SEO_ROUTES) {
+    const html = await (await fetch(ORIGIN + route)).text();
+    seo.push({
+      route,
+      title: meta(html, /<title>([^<]*)<\/title>/),
+      description: meta(html, /<meta name="description" content="([^"]*)"/),
+      canonical: meta(html, /<link rel="canonical" href="([^"]*)"/),
+      ogTitle: meta(html, /<meta property="og:title" content="([^"]*)"/),
+      ogDescription: meta(html, /<meta property="og:description" content="([^"]*)"/),
+      ogUrl: meta(html, /<meta property="og:url" content="([^"]*)"/),
+      ogImage: meta(html, /<meta property="og:image" content="([^"]*)"/),
+      twCard: meta(html, /<meta name="twitter:card" content="([^"]*)"/),
+      twImage: meta(html, /<meta name="twitter:image" content="([^"]*)"/),
+      jsonLd: meta(html, /<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/),
+    });
+  }
+
+  const allPresent = (field) => seo.filter((row) => !row[field]).map((row) => row.route);
+  const allUnique = (field) => new Set(seo.map((row) => row[field])).size === seo.length;
+
+  for (const field of ['title', 'description', 'canonical', 'ogTitle', 'ogUrl', 'ogImage']) {
+    const missing = allPresent(field);
+    check(
+      `Every route has a ${field}, and every one is unique`,
+      missing.length === 0 && allUnique(field),
+      missing.length
+        ? `missing on ${missing.join(', ')}`
+        : `${seo.length} routes, ${new Set(seo.map((r) => r[field])).size} distinct values`,
+    );
+  }
+
+  // The PATH is checked against the route unconditionally. The ORIGIN is a
+  // separate assertion, because NEXT_PUBLIC_SITE_URL is inlined at build time:
+  // a local build pins localhost:3000 while this suite drives a throwaway port,
+  // and treating that as a failure would make the check noise locally and
+  // train us to ignore it. Against a deployed origin it is a real check, and
+  // that is exactly where CLAUDE.md 13 says a wrong canonical does its damage.
+  const canonicalPath = (row) => {
+    try {
+      return new URL(row.canonical ?? '').pathname.replace(/\/$/, '') || '/';
+    } catch {
+      return null;
+    }
+  };
+  const selfCanonical = seo.filter((row) => {
+    const expected = row.route === '/' ? '/' : row.route.replace(/\/$/, '');
+    return canonicalPath(row) !== expected;
+  });
+  check(
+    'Every canonical points at the route it is on, not at another page',
+    selfCanonical.length === 0,
+    selfCanonical.length
+      ? selfCanonical.map((r) => `${r.route} -> ${r.canonical}`).join(' | ')
+      : `paths match on all ${seo.length} routes`,
+  );
+
+  const canonicalOrigins = [
+    ...new Set(
+      seo.map((row) => {
+        try {
+          return new URL(row.canonical ?? '').origin;
+        } catch {
+          return 'unparseable';
+        }
+      }),
+    ),
+  ];
+  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(ORIGIN);
+  check(
+    'Every canonical resolves to one origin, and on a deployed host it is this host',
+    canonicalOrigins.length === 1 && (isLocal || canonicalOrigins[0] === ORIGIN.replace(/\/$/, '')),
+    isLocal
+      ? `${canonicalOrigins[0]} — build-time NEXT_PUBLIC_SITE_URL, not the test port; asserted strictly against a deployed origin`
+      : `${canonicalOrigins[0]} vs served from ${ORIGIN}`,
+  );
+
+  const ogUrlMismatch = seo.filter(
+    (row) => (row.ogUrl ?? '').replace(/\/$/, '') !== (row.canonical ?? '').replace(/\/$/, ''),
+  );
+  check(
+    'og:url agrees with the canonical on every route',
+    ogUrlMismatch.length === 0,
+    ogUrlMismatch.length
+      ? ogUrlMismatch.map((r) => `${r.route}: og=${r.ogUrl} canonical=${r.canonical}`).join(' | ')
+      : 'all 8 agree',
+  );
+
+  const titleLeak = seo.filter((row) => row.route !== '/' && row.ogTitle === seo[0].ogTitle);
+  check(
+    'No route inherits the homepage og:title (the shallow-merge trap)',
+    titleLeak.length === 0,
+    titleLeak.length ? titleLeak.map((r) => r.route).join(', ') : 'each card carries its own title',
+  );
+
+  check(
+    'Every route declares a summary_large_image Twitter card with an image',
+    seo.every((row) => row.twCard === 'summary_large_image' && row.twImage),
+    `${seo.filter((r) => r.twCard === 'summary_large_image').length}/${seo.length} cards, ` +
+      `${seo.filter((r) => r.twImage).length}/${seo.length} images`,
+  );
+
+  // ------------------------------------------------------- OG IMAGES REAL --
+  //
+  // CLAUDE.md 13: these fail silently. A tag that points at a 404, or at
+  // something that is not an image, looks identical in the page source to one
+  // that works. So the bytes are fetched and decoded: PNG signature, and the
+  // dimensions read out of the IHDR chunk.
+  console.log('\nOG IMAGES');
+  const ogFailures = [];
+  let ogBytes = 0;
+  for (const row of seo) {
+    if (!row.ogImage) {
+      ogFailures.push(`${row.route}: no tag`);
+      continue;
+    }
+    const res = await fetch(row.ogImage.replace(/^https?:\/\/[^/]+/, ORIGIN));
+    const buf = Buffer.from(await res.arrayBuffer());
+    const isPng = buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG';
+    const width = isPng ? buf.readUInt32BE(16) : 0;
+    const height = isPng ? buf.readUInt32BE(20) : 0;
+    ogBytes += buf.length;
+    if (!res.ok || !isPng || width !== 1200 || height !== 630) {
+      ogFailures.push(`${row.route}: HTTP ${res.status} png=${isPng} ${width}x${height}`);
+    }
+  }
+  check(
+    'Every og:image fetches as a real 1200x630 PNG',
+    ogFailures.length === 0,
+    ogFailures.length
+      ? ogFailures.join(' | ')
+      : `${seo.length} images, ${(ogBytes / 1024 / seo.length).toFixed(0)}KB average`,
+  );
+
+  // ------------------------------------------------- SITEMAP AND ROBOTS --
+  console.log('\nSITEMAP AND ROBOTS');
+  const sitemapRes = await fetch(ORIGIN + '/sitemap.xml');
+  const sitemapXml = await sitemapRes.text();
+  const locs = [...sitemapXml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const sitemapPaths = locs.map((l) => new URL(l).pathname);
+
+  check(
+    'sitemap.xml is reachable and lists exactly the indexable routes',
+    sitemapRes.ok &&
+      JSON.stringify([...sitemapPaths].sort()) === JSON.stringify([...SEO_ROUTES].sort()),
+    `HTTP ${sitemapRes.status}, ${sitemapPaths.length} urls: ${sitemapPaths.join(' ')}`,
+  );
+  check(
+    'The sitemap does not advertise /work, which is a permanent redirect',
+    !sitemapPaths.includes('/work'),
+    'a crawler is not asked to discover a URL only to be told it moved',
+  );
+
+  const sitemapStatuses = [];
+  for (const loc of locs) {
+    const res = await fetch(loc.replace(/^https?:\/\/[^/]+/, ORIGIN), { redirect: 'manual' });
+    if (res.status !== 200) sitemapStatuses.push(`${new URL(loc).pathname} -> ${res.status}`);
+  }
+  check(
+    'Every URL in the sitemap returns 200 without redirecting',
+    sitemapStatuses.length === 0,
+    sitemapStatuses.length ? sitemapStatuses.join(', ') : `${locs.length} urls checked`,
+  );
+
+  const robotsRes = await fetch(ORIGIN + '/robots.txt');
+  const robotsTxt = await robotsRes.text();
+  check(
+    'robots.txt allows the site, disallows /api/, and points at the sitemap',
+    robotsRes.ok &&
+      /Allow: \//.test(robotsTxt) &&
+      /Disallow: \/api\//.test(robotsTxt) &&
+      /Sitemap: .*\/sitemap\.xml/.test(robotsTxt),
+    robotsTxt.replace(/\n+/g, ' | ').trim(),
+  );
+
+  // --------------------------------------------------------- STRUCTURED --
+  //
+  // JSON-LD is machine-readable claims about the company. CLAUDE.md 11 says
+  // there is no address, no founding date and no social presence, so those
+  // keys must be absent rather than empty — a consumer treats what is there
+  // as fact.
+  console.log('\nSTRUCTURED DATA');
+  check(
+    'Organization JSON-LD is on every route',
+    seo.every((row) => row.jsonLd),
+    `${seo.filter((r) => r.jsonLd).length}/${seo.length} routes`,
+  );
+
+  let ld = null;
+  let ldError = '';
+  try {
+    ld = JSON.parse((seo[0].jsonLd ?? '').replace(/\\u003c/g, '<'));
+  } catch (error) {
+    ldError = error.message;
+  }
+  check(
+    'The JSON-LD parses and describes an Organization',
+    ld !== null && ld['@type'] === 'Organization' && ld['@context'] === 'https://schema.org',
+    ld ? `@type=${ld['@type']}, name=${ld.name}` : `parse failed: ${ldError}`,
+  );
+
+  const UNVERIFIABLE = [
+    'address',
+    'foundingDate',
+    'numberOfEmployees',
+    'sameAs',
+    'logo',
+    'employee',
+    'location',
+    'award',
+    'aggregateRating',
+    'review',
+  ];
+  const claimed = ld ? UNVERIFIABLE.filter((key) => key in ld) : ['(unparsed)'];
+  check(
+    'The JSON-LD claims nothing Sarva Tech cannot currently prove',
+    claimed.length === 0,
+    claimed.length ? `present: ${claimed.join(', ')}` : `none of: ${UNVERIFIABLE.join(', ')}`,
+  );
+  check(
+    'The one contact point in the JSON-LD is the WhatsApp number that exists',
+    Boolean(
+      ld?.contactPoint?.length === 1 &&
+        ld.contactPoint[0].telephone === '+234 813 393 3217' &&
+        ld.contactPoint[0].url === 'https://wa.me/2348133933217',
+    ),
+    JSON.stringify(ld?.contactPoint ?? null),
+  );
+
+
+  // -------------------------------------------------------------- /ABOUT --
+  console.log('\nABOUT');
+  await client.goto(ORIGIN + '/about');
+  await wait(350);
+  const about = await client.eval(`(() => {
+    const main = document.querySelector('main') || document.body;
+    const text = main.innerText;
+    return {
+      h1: [...main.querySelectorAll('h1')].map(h => h.textContent.trim()),
+      h2: [...main.querySelectorAll('h2')].map(h => h.textContent.trim()),
+      text,
+      words: text.trim().split(/\\s+/).length,
+      images: main.querySelectorAll('img').length,
+      linksSolutions: [...main.querySelectorAll('a[href]')].some(a => a.getAttribute('href') === '/solutions'),
+      linksStart: [...main.querySelectorAll('a[href]')].some(a => a.getAttribute('href') === '/start'),
+      inverted: document.querySelectorAll('[data-surface="inverted"]').length,
+    };
+  })()`);
+
+  check(
+    '/about leads on the philosophy, not a company history',
+    about.h1.length === 1 && about.h1[0] === 'Technology should be useful.',
+    `h1 = ${JSON.stringify(about.h1)}`,
+  );
+  check(
+    '/about covers all three required ideas',
+    /own products/i.test(about.text) &&
+      /friction/i.test(about.text) &&
+      /(number of products|several products)/i.test(about.text),
+    `own products=${/own products/i.test(about.text)}, friction=${/friction/i.test(about.text)}, ` +
+      `parent brand=${/(number of products|several products)/i.test(about.text)}`,
+  );
+  check(
+    '/about names the real products, read from the MDX rather than typed in',
+    solutions.names.every((name) => about.text.includes(name)),
+    `expects ${solutions.names.join(' and ')} — present: ${solutions.names.filter((n) => about.text.includes(n)).join(', ')}`,
+  );
+  check(
+    '/about links to both /solutions and /start',
+    about.linksSolutions && about.linksStart,
+    `/solutions=${about.linksSolutions}, /start=${about.linksStart}`,
+  );
+  check(
+    '/about invents nothing: no team, no founding date, no office, no statistics',
+    !/(founded|established|since \d{4}|our team|years of experience|\d+\+? (clients|projects|customers|employees))/i.test(
+      about.text,
+    ) && about.images === 0,
+    `${about.words} words, ${about.images} images, no fabricated claims matched`,
+  );
+  check(
+    '/about states the parent-brand ambition as intent, not as accomplishment',
+    /(intention|intends|intend)/i.test(about.text) &&
+      !/(we are|is) (the )?(leading|largest|foremost|top)/i.test(about.text),
+    'phrased as what the company means to become',
+  );
+
+  // --------------------------------------------------------------- LEGAL --
+  //
+  // The failure mode for a legal page is a copied template that describes
+  // cookies and trackers the site does not have. So this asserts the specific
+  // true things and the absence of the specific false ones.
+  console.log('\nLEGAL');
+  await client.goto(ORIGIN + '/privacy');
+  await wait(350);
+  const privacy = await client.eval(`(() => {
+    const main = document.querySelector('main') || document.body;
+    const text = main.innerText;
+    return {
+      words: text.trim().split(/\\s+/).length,
+      text,
+      h2: [...main.querySelectorAll('h2')].map(h => h.textContent.trim()),
+      monoCount: [...main.querySelectorAll('*')].filter(el => {
+        const f = getComputedStyle(el).fontFamily;
+        return /mono/i.test(f) && el.textContent.trim().length > 0;
+      }).length,
+    };
+  })()`);
+
+  check(
+    '/privacy is real content, not the S1 stub',
+    privacy.words > 500 && !/written in S6/i.test(privacy.text) && privacy.h2.length >= 6,
+    `${privacy.words} words, ${privacy.h2.length} sections`,
+  );
+  check(
+    '/privacy names the three processors that actually handle the data',
+    /Supabase/.test(privacy.text) &&
+      /Resend/.test(privacy.text) &&
+      /Vercel/.test(privacy.text),
+    'Supabase (storage), Resend (notification), Vercel (hosting)',
+  );
+  check(
+    '/privacy states there are no cookies, rather than describing cookies it does not set',
+    /no cookies/i.test(privacy.text) &&
+      /(no analytics|no tracking)/i.test(privacy.text) &&
+      !/we use cookies/i.test(privacy.text),
+    'a template describing trackers that do not exist would fail here',
+  );
+  check(
+    '/privacy discloses the two browser storage keys the site really uses',
+    /theme/i.test(privacy.text) && /(draft|refresh)/i.test(privacy.text),
+    'theme preference in localStorage, intake draft in sessionStorage',
+  );
+  check(
+    '/privacy is honest that the IP address is used but not stored',
+    /IP address/i.test(privacy.text) &&
+      /(not written to our database|not stored)/i.test(privacy.text),
+    'rate limiting reads it in memory only',
+  );
+  check(
+    '/privacy gives a working route for a deletion request',
+    /wa\.me\/2348133933217/.test(privacy.text) || privacy.text.includes('813 393 3217'),
+    'WhatsApp plus the contact form — no invented email address',
+  );
+
+  await client.goto(ORIGIN + '/terms');
+  await wait(350);
+  const terms = await client.eval(`(() => {
+    const main = document.querySelector('main') || document.body;
+    const text = main.innerText;
+    return {
+      words: text.trim().split(/\\s+/).length,
+      text,
+      h2: [...main.querySelectorAll('h2')].map(h => h.textContent.trim()),
+    };
+  })()`);
+  check(
+    '/terms is real content, not the S1 stub',
+    terms.words > 400 && !/written in S6/i.test(terms.text) && terms.h2.length >= 6,
+    `${terms.words} words, ${terms.h2.length} sections`,
+  );
+  check(
+    '/terms promises no service level nobody agreed to',
+    !/(99\.9|uptime guarantee|guaranteed availability|service level agreement|SLA)/i.test(
+      terms.text,
+    ) && /(as it is|without interruption)/i.test(terms.text),
+    'availability is explicitly not warranted',
+  );
+  check(
+    '/terms defers actual project work to a separate signed agreement',
+    /(separate written agreement|written into an agreement)/i.test(terms.text),
+    'the marketing site does not try to be the contract',
+  );
+
+  // ------------------------------------------------ NO DATED PROMISES --
+  //
+  // CLAUDE.md: "in testing" is the whole status. No launch dates anywhere in
+  // public copy, on any route.
+  const datedPromises = [];
+  for (const route of SEO_ROUTES) {
+    await client.goto(ORIGIN + route);
+    await wait(200);
+    const hit = await client.eval(`(() => {
+      const text = (document.querySelector('main') || document.body).innerText;
+      const bad = text.match(/(launching soon|coming soon|coming weeks|coming months|in the next few (weeks|months)|by (Q[1-4]|January|February|March|April|May|June|July|August|September|October|November|December)\\s*\\d{0,4}|available (soon|shortly))/gi);
+      return bad ? [...new Set(bad)] : [];
+    })()`);
+    if (hit.length) datedPromises.push(`${route}: ${hit.join(', ')}`);
+  }
+  check(
+    'No route promises a launch date or timeframe',
+    datedPromises.length === 0,
+    datedPromises.length ? datedPromises.join(' | ') : `${SEO_ROUTES.length} routes checked`,
+  );
+
+  // ------------------------------------------ READOUT DISCIPLINE (4.6) --
+  //
+  // S4 deferred this: the /start step numbers were mono, which 4.6 reserves
+  // for instrumentation. Asserting the computed font-family rather than the
+  // absence of a component, because the rule is about what a person sees.
+  console.log('\nREADOUT DISCIPLINE');
+  await client.goto(ORIGIN + '/start');
+  await wait(400);
+  const startMono = await client.eval(`(() => {
+    const main = document.querySelector('main') || document.body;
+    const mono = [...main.querySelectorAll('*')]
+      .filter(el => el.children.length === 0 && el.textContent.trim())
+      .filter(el => /mono/i.test(getComputedStyle(el).fontFamily))
+      .map(el => el.textContent.trim().slice(0, 40));
+    const stepText = [...main.querySelectorAll('p')]
+      .map(p => ({ text: p.textContent.trim(), font: getComputedStyle(p).fontFamily }))
+      .find(p => /^Step \\d+ of \\d+$/.test(p.text));
+    return { mono, stepText };
+  })()`);
+  check(
+    'The /start step counter is body copy, not the readout treatment',
+    Boolean(startMono.stepText) && !/mono/i.test(startMono.stepText?.font ?? 'mono'),
+    startMono.stepText
+      ? `"${startMono.stepText.text}" in ${startMono.stepText.font.split(',')[0]}`
+      : 'step counter not found',
+  );
+  check(
+    'Nothing on /start uses monospace at all — a form has no instrumentation on it',
+    startMono.mono.length === 0,
+    startMono.mono.length ? `mono text: ${startMono.mono.join(' | ')}` : 'no monospace elements',
+  );
+
+
+  // ------------------------------------------------- ACCESSIBILITY SWEEP --
+  //
+  // CLAUDE.md 7, applied to every route rather than the one being built. The
+  // per-route suites above test behaviour; this is the structural pass that
+  // catches a heading level skipped on a page nobody was looking at.
+  console.log('\nACCESSIBILITY SWEEP');
+
+  const a11yProblems = { headings: [], landmarks: [], names: [], alt: [], lang: [] };
+
+  for (const route of SEO_ROUTES) {
+    await client.goto(ORIGIN + route);
+    await wait(300);
+    const found = await client.eval(`(() => {
+      const doc = document;
+      const main = doc.querySelector('main');
+      const scope = main || doc.body;
+
+      const headings = [...scope.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+        .filter(h => h.offsetParent !== null || h.className.includes('sr-only'))
+        .map(h => ({ level: Number(h.tagName[1]), text: h.textContent.trim().slice(0, 50) }));
+
+      let skip = null;
+      for (let i = 1; i < headings.length; i++) {
+        if (headings[i].level - headings[i - 1].level > 1) {
+          skip = headings[i - 1].level + ' -> ' + headings[i].level + ' at "' + headings[i].text + '"';
+          break;
+        }
+      }
+
+      // An accessible name, computed the way a screen reader would look for
+      // one: text, aria-label, aria-labelledby, or the alt of an image inside.
+      const named = (el) => {
+        if (el.getAttribute('aria-label')?.trim()) return true;
+        const ref = el.getAttribute('aria-labelledby');
+        if (ref && ref.split(/\\s+/).some(id => doc.getElementById(id)?.textContent.trim())) return true;
+        if (el.textContent.trim()) return true;
+        if ([...el.querySelectorAll('img[alt]')].some(i => i.getAttribute('alt').trim())) return true;
+        if (el.querySelector('svg[aria-label], svg title')) return true;
+        return false;
+      };
+
+      const unnamed = [...doc.querySelectorAll('a[href], button')]
+        .filter(el => el.offsetParent !== null)
+        .filter(el => !named(el))
+        .map(el => el.tagName + '[' + (el.getAttribute('href') || el.className).slice(0, 30) + ']');
+
+      const imgsNoAlt = [...doc.querySelectorAll('img')]
+        .filter(i => !i.hasAttribute('alt'))
+        .map(i => i.getAttribute('src'));
+
+      return {
+        h1: headings.filter(h => h.level === 1).length,
+        skip,
+        headingCount: headings.length,
+        hasMain: !!main,
+        hasHeader: !!doc.querySelector('header'),
+        hasNav: !!doc.querySelector('nav'),
+        hasFooter: !!doc.querySelector('footer'),
+        lang: doc.documentElement.getAttribute('lang'),
+        unnamed,
+        imgsNoAlt,
+      };
+    })()`);
+
+    if (found.h1 !== 1) a11yProblems.headings.push(`${route}: ${found.h1} h1`);
+    if (found.skip) a11yProblems.headings.push(`${route}: skipped ${found.skip}`);
+    if (!found.hasMain || !found.hasHeader || !found.hasNav || !found.hasFooter) {
+      a11yProblems.landmarks.push(
+        `${route}: main=${found.hasMain} header=${found.hasHeader} nav=${found.hasNav} footer=${found.hasFooter}`,
+      );
+    }
+    if (found.unnamed.length) a11yProblems.names.push(`${route}: ${found.unnamed.join(', ')}`);
+    if (found.imgsNoAlt.length) a11yProblems.alt.push(`${route}: ${found.imgsNoAlt.join(', ')}`);
+    if (found.lang !== 'en') a11yProblems.lang.push(`${route}: lang=${found.lang}`);
+  }
+
+  check(
+    'Every route has exactly one h1 and skips no heading level',
+    a11yProblems.headings.length === 0,
+    a11yProblems.headings.length
+      ? a11yProblems.headings.join(' | ')
+      : `${SEO_ROUTES.length} routes`,
+  );
+  check(
+    'Every route has header, nav, main and footer landmarks',
+    a11yProblems.landmarks.length === 0,
+    a11yProblems.landmarks.length ? a11yProblems.landmarks.join(' | ') : 'all four on all 8 routes',
+  );
+  check(
+    'Every visible link and button has an accessible name',
+    a11yProblems.names.length === 0,
+    a11yProblems.names.length ? a11yProblems.names.join(' | ') : 'no unnamed controls',
+  );
+  check(
+    'No image is missing an alt attribute',
+    a11yProblems.alt.length === 0,
+    a11yProblems.alt.length ? a11yProblems.alt.join(' | ') : 'the site ships no <img> at all',
+  );
+  check(
+    'The document language is declared on every route',
+    a11yProblems.lang.length === 0,
+    a11yProblems.lang.length ? a11yProblems.lang.join(' | ') : 'lang="en"',
+  );
+
+  // Focus visibility, measured rather than assumed: tab to the first control
+  // on each new route and confirm the computed outline actually changes.
+  const focusProblems = [];
+  for (const route of ['/about', '/privacy', '/terms']) {
+    await client.goto(ORIGIN + route);
+    await wait(300);
+    const ring = await client.eval(`(() => {
+      const el = [...document.querySelectorAll('main a[href], main button')]
+        .find(e => e.offsetParent !== null);
+      if (!el) return { skipped: true };
+      const before = getComputedStyle(el).outlineWidth + ' ' + getComputedStyle(el).outlineColor;
+      el.focus();
+      const after = getComputedStyle(el).outlineWidth + ' ' + getComputedStyle(el).outlineColor;
+      return {
+        changed: before !== after,
+        after,
+        width: parseFloat(getComputedStyle(el).outlineWidth),
+        isFocused: document.activeElement === el,
+      };
+    })()`);
+    if (!ring.skipped && (!ring.isFocused || !(ring.width > 0))) {
+      focusProblems.push(`${route}: outline ${ring.after}, focused=${ring.isFocused}`);
+    }
+  }
+  check(
+    'Focusing a control on the new routes produces a visible focus ring',
+    focusProblems.length === 0,
+    focusProblems.length ? focusProblems.join(' | ') : 'outline width > 0 on /about, /privacy, /terms',
+  );
+
+  // Both themes, on the new routes: the legal prose must resolve to the
+  // theme's own text colour, not a colour inherited from the other one.
+  for (const theme of ['night', 'day']) {
+    await client.eval(`localStorage.setItem('sarva-theme','${theme}')`);
+    const themeProblems = [];
+    for (const route of ['/about', '/privacy', '/terms']) {
+      await client.goto(ORIGIN + route);
+      await wait(300);
+      const seen = await client.eval(`(() => {
+        const h1 = document.querySelector('main h1');
+        const body = document.body;
+        return {
+          attr: document.documentElement.getAttribute('data-theme'),
+          bg: getComputedStyle(body).backgroundColor,
+          h1: h1 ? getComputedStyle(h1).color : null,
+        };
+      })()`);
+      const wantBg = toRgb(colorTokens['surface-base'][theme]);
+      const wantFg = toRgb(colorTokens.primary[theme]);
+      if (seen.attr !== theme || seen.bg !== wantBg || seen.h1 !== wantFg) {
+        themeProblems.push(`${route}: bg=${seen.bg} (want ${wantBg}), h1=${seen.h1} (want ${wantFg})`);
+      }
+    }
+    check(
+      `The new routes read correctly in the ${theme} theme`,
+      themeProblems.length === 0,
+      themeProblems.length ? themeProblems.join(' | ') : '/about, /privacy, /terms',
+    );
+  }
+  await client.eval(`localStorage.setItem('sarva-theme','night')`);
+
 } finally {
   try {
     client?.ws.close();

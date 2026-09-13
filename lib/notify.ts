@@ -28,8 +28,7 @@ export async function notifySubmission(
   if (!apiKey) return { sent: false, reason: 'RESEND_API_KEY not set.' };
   if (!to) return { sent: false, reason: 'SUBMISSION_NOTIFY_TO not set.' };
 
-  const heading =
-    input.kind === 'intake' ? 'New project intake' : 'New contact message';
+  const heading = input.kind === 'intake' ? 'New project intake' : 'New contact message';
 
   const body = [
     `${heading} — ${id}`,

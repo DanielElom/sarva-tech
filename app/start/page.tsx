@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
+import { pageMetadata } from '@/lib/metadata';
 import { IntakeFlow } from '@/components/sections/intake-flow';
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  route: '/start',
   title: 'Start a Project',
   description:
     'Tell Sarva Tech what is not working. Five short steps, and you will hear back with what we would build, what it would take, and whether we are the right people for it.',
-  alternates: { canonical: '/start' },
-  robots: { index: true, follow: true },
-};
+});
 
 /**
  * CLAUDE.md 10: an action keeps the same name through a whole flow, so every
