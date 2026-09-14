@@ -352,31 +352,81 @@ assumptions, and confirmation of readiness for the next session without starting
 
 ## 13. Before launch
 
-- [ ] Domain registered and pointed at Vercel
-- [ ] Resend sending domain verified via DNS, real delivery tested to an external inbox.
-      Until then notifications send from Resend's test address
-      (`onboarding@resend.dev`), which only delivers to the account owner and
-      will land in spam for anyone else. `RESEND_FROM` switches it over.
-- [ ] Google Workspace mailbox live, address wired into footer and contact page
-- [ ] Supabase intake table has row-level security, anon key cannot read submissions
-- [ ] Privacy policy written, personal data collection disclosed
-- [ ] Terms of service written
-- [ ] Real logo replaces the wordmark, or the wordmark is confirmed as final
-- [ ] Both solutions published, details confirmed accurate, no launch dates or
-      unverifiable claims in public copy
-- [ ] Lighthouse mobile ≥ 90 on every route
-- [ ] Both themes audited on a real Android device, not just a desktop emulator
-- [ ] Reduced-motion pass on every page
-- [ ] `grep` for hardcoded colours returns nothing
-- [ ] 404 and error pages designed, not framework defaults
-- [ ] OG images render correctly when a link is shared to WhatsApp
-- [ ] Rate limiter is in-memory and per-instance. On Vercel a burst spread across
-      lambdas exceeds the intended ceiling. Decide before launch whether a shared
-      store is needed.
-- [ ] `NEXT_PUBLIC_SITE_URL` set explicitly in Vercel once the real domain is live.
-      Until then production resolves to the `vercel.app` host, and canonical URLs,
-      sitemap and OG images will all point at the wrong origin. OG images fail
-      silently — the link looks fine until it is shared.
+Status as of the end of S7. `[x]` means verified this session, not assumed.
+`[ ]` with **blocked** means it cannot be done until the client acts.
+The ordered procedure for every domain-dependent item is in `LAUNCH.md`.
+
+- [ ] **blocked on client** — Domain registered and pointed at Vercel.
+- [ ] **blocked on client** — Resend sending domain verified via DNS, real
+      delivery tested to an external inbox. Until then notifications send from
+      Resend's test address (`onboarding@resend.dev`), which only delivers to
+      the account owner and will land in spam for anyone else. `RESEND_FROM`
+      switches it over.
+- [ ] **blocked on client** — Google Workspace mailbox live, address wired into
+      footer and contact page. `CONTACT.email` is `null` until then, and the
+      footer and contact page already branch on it.
+- [x] Supabase intake table has row-level security, anon key cannot read
+      submissions. Re-probed in S7 against production: anon is refused both
+      read (`42501`) and insert. No client bundle references the anon key at
+      all — there is no client-side Supabase.
+- [x] Privacy policy written, personal data collection disclosed. Written
+      against the actual columns, processors and storage keys. **Not reviewed
+      by a lawyer.**
+- [x] Terms of service written. Proportionate to a marketing site, no service
+      level asserted. **Not reviewed by a lawyer.**
+- [ ] **client decision** — Real logo replaces the wordmark, or the wordmark is
+      confirmed as final.
+- [x] Both solutions published, details confirmed accurate, no launch dates or
+      unverifiable claims in public copy. Asserted across all eight routes.
+- [x] Lighthouse mobile ≥ 90 on every route. Medians on the deployed site:
+      `/` 90, `/services` and `/solutions` 95–97, `/about` 96, `/privacy` 96,
+      `/terms` 95, all a11y 100, CLS 0.000 everywhere.
+      **The homepage LCP is 2.76s and does not meet the < 2.5s line in §6.**
+      It is not machine noise — see the note below.
+- [ ] **needs a device** — Both themes audited on a real Android device, not
+      just a desktop emulator.
+- [x] Reduced-motion pass on every page. Asserted on all eight routes: nothing
+      animates, and every route still renders its full content.
+- [x] `grep` for hardcoded colours returns nothing. Hex, `rgb()`/`hsl()` and
+      Tailwind palette classes, across `app/` and `components/`.
+- [x] 404 and error pages designed, not framework defaults. Both carry the site
+      chrome and the readout status line.
+- [x] OG images generate and serve correctly — eight distinct 1200x630 PNGs,
+      each fetched and decoded in the suite, with per-route `og:image`,
+      `og:title` and `og:url`. **The WhatsApp unfurl itself cannot be tested
+      until the domain is live** (LAUNCH.md step 8).
+- [ ] **client decision** — Rate limiter is in-memory and per-instance. On
+      Vercel a burst spread across lambdas exceeds the intended ceiling.
+      Decide before launch whether a shared store is needed.
+- [ ] **blocked on client** — `NEXT_PUBLIC_SITE_URL` set explicitly in Vercel
+      once the real domain is live. Note it is inlined at build time, so the
+      variable does nothing without a redeploy. LAUNCH.md step 6.
+
+### The homepage LCP
+
+Measured on the deployed site on a quiet machine: 2.62–2.83s in six runs of
+seven, with one at 1.23s. It does not track machine load, so the S6 reading
+that called it contention was wrong.
+
+The LCP element is the `<h1>`, which is in the server-rendered HTML. Its
+`Load Delay` and `Load Time` are both 0ms — nothing is being fetched for it.
+The whole cost is `Render Delay`: 479ms on the fast run, ~2000ms on the slow
+ones, with LCP landing immediately after a 330–500ms hydration long task. The
+three static routes share the same shell and reach LCP at ~1.2s, and the
+homepage document executes 664ms of script against `/privacy`'s 430ms.
+
+So the cost is homepage hydration, and the two things to try, in order:
+
+1. Gate `ProblemFirst` (seven tabs) and `TechnologyEcosystem` (eight panels)
+   behind intersection-triggered dynamic imports. Both are below the fold and
+   both hydrate eagerly today. The pattern is already proven in
+   `hero-node-graph-animator.tsx`.
+2. Give `StatusLine` a server-rendered placeholder with identical dimensions.
+   It sits directly under the `<h1>` and swaps content after an idle fetch,
+   which is the most likely trigger for a second LCP candidate on that element.
+
+Neither was done in S7: both change how the homepage renders and would need
+their own verification pass rather than a change made on the last day.
 
 ---
 
