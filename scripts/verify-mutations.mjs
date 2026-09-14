@@ -494,7 +494,7 @@ const MUTATIONS = [
     name: 'Sitemap advertises /work, which permanently redirects',
     file: 'app/sitemap.ts',
     find: '  return INDEXABLE_ROUTES.map((route) => ({',
-    replace: `  const extra = [{ path: '/work', changeFrequency: 'monthly', priority: 0.5 }];
+    replace: `  const extra = [{ path: '/work', changeFrequency: 'monthly' as const, priority: 0.5 }];
   return [...INDEXABLE_ROUTES, ...extra].map((route) => ({`,
     artefact: "path: '/work'",
     expect: [
