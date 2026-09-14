@@ -648,6 +648,17 @@ const MUTATIONS = [
   }`,
     expect: ['No inline link is distinguished from its surrounding text by colour alone'],
   },
+  {
+    name: 'Reduced-motion backstop removed from the stylesheet',
+    file: 'app/globals.css',
+    find: `    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;`,
+    replace: `    animation-iteration-count: 1 !important;`,
+    artefact: `    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;`,
+    expect: ['With reduced motion, nothing on any route animates or transitions'],
+  },
 ];
 
 /**

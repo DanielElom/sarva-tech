@@ -2721,6 +2721,67 @@ try {
   );
 
 
+
+  // ---------------------------------------------- REDUCED MOTION, SITEWIDE --
+  //
+  // CLAUDE.md 5 and 13 ask for a reduced-motion pass on every page, not just on
+  // the page with the animation. Two things are asserted, because the CSS
+  // backstop alone is not the requirement: nothing animates, AND the content is
+  // all still there. A page that satisfies reduced motion by rendering nothing
+  // has not satisfied it.
+  await client.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  });
+  const motionProblems = [];
+  const emptyProblems = [];
+  for (const route of SEO_ROUTES) {
+    await client.goto(ORIGIN + route);
+    await wait(350);
+    const seen = await client.eval(`(() => {
+      const longest = { dur: 0, sel: null };
+      for (const el of document.querySelectorAll('main *, header *, footer *')) {
+        const s = getComputedStyle(el);
+        for (const raw of [s.animationDuration, s.transitionDuration]) {
+          for (const part of String(raw).split(',')) {
+            const t = part.trim();
+            const ms = t.endsWith('ms') ? parseFloat(t) : parseFloat(t) * 1000;
+            if (Number.isFinite(ms) && ms > longest.dur) {
+              longest.dur = ms;
+              longest.sel = el.tagName.toLowerCase() + '.' + String(el.className).slice(0, 28);
+            }
+          }
+        }
+      }
+      const main = document.querySelector('main') || document.body;
+      return {
+        longestMs: longest.dur,
+        worst: longest.sel,
+        words: main.innerText.trim().split(/\\s+/).length,
+        headings: main.querySelectorAll('h1,h2,h3').length,
+      };
+    })()`);
+    // 0.01ms is what the backstop clamps to; allow a hair above for rounding.
+    if (seen.longestMs > 1) motionProblems.push(`${route}: ${seen.longestMs}ms on ${seen.worst}`);
+    if (seen.words < 60 || seen.headings < 1) {
+      emptyProblems.push(`${route}: ${seen.words} words, ${seen.headings} headings`);
+    }
+  }
+  check(
+    'With reduced motion, nothing on any route animates or transitions',
+    motionProblems.length === 0,
+    motionProblems.length
+      ? motionProblems.join(' | ')
+      : `${SEO_ROUTES.length} routes, longest duration clamped to 0.01ms`,
+  );
+  check(
+    'With reduced motion, every route still renders its full content',
+    emptyProblems.length === 0,
+    emptyProblems.length
+      ? emptyProblems.join(' | ')
+      : 'text and headings present on all 8 routes — motion off is not content off',
+  );
+  await client.send('Emulation.setEmulatedMedia', { features: [] });
+
   // A link sitting inside a paragraph of running text must be distinguishable
   // from that text by something other than colour (WCAG 1.4.1). Lighthouse
   // found this on /privacy and /terms when the sweep above did not: the sweep
