@@ -222,7 +222,13 @@ site makes its first argument in the first three seconds, and a stuttering hero 
 Checked at the end of **every** session, not once at launch:
 
 - Lighthouse mobile performance ≥ 90
-- LCP < 2.5s, CLS < 0.1, INP < 200ms
+- LCP < 2.5s, CLS < 0.1, INP < 200ms. **Verify LCP against what a browser
+  records, not against Lighthouse's default number.** That default is
+  `--throttling-method=simulate` (Lantern), which loads the page unthrottled and
+  then models a slow connection. On the homepage the model says 2.7s and the
+  browser says 0.7s, and blocking every script moves the model by 0.01s. Use
+  `pnpm verify:lcp`, or `--throttling-method=devtools`, before believing an LCP
+  regression exists. The ceiling itself does not move; only the instrument does.
 - Initial route payload: ≤200KB JS gzipped, measured from rendered HTML.
   Baseline after S1: 182.8KB.
 - Deferred post-paint chunks: ≤50KB gzipped per route, loaded on idle or
@@ -323,6 +329,7 @@ Footer copyright year is generated at build time, never typed.
 | S5      | Intake and contact: five-step flow, Supabase, Resend, spam protection, contact page                              | complete |
 | S6      | Content layer: MDX solutions, /solutions, homepage proof section, /work removed                                  | complete |
 | S7      | About, SEO, OG images, sitemap, structured data, legal pages, a11y audit, launch                                 | complete |
+| S8      | Homepage hydration. Closed without shipping — the LCP it targeted was a simulation artifact                      | complete |
 
 The conversion footer was built in S1, so S3 no longer included it.
 
@@ -379,10 +386,14 @@ The ordered procedure for every domain-dependent item is in `LAUNCH.md`.
 - [x] Both solutions published, details confirmed accurate, no launch dates or
       unverifiable claims in public copy. Asserted across all eight routes.
 - [x] Lighthouse mobile ≥ 90 on every route. Medians on the deployed site:
-      `/` 90, `/services` and `/solutions` 95–97, `/about` 96, `/privacy` 96,
-      `/terms` 95, all a11y 100, CLS 0.000 everywhere.
-      **The homepage LCP is 2.76s and does not meet the < 2.5s line in §6.**
-      It is not machine noise — see the note below.
+      `/services` and `/solutions` 95–97, `/about` 96, `/privacy` 96, `/terms`
+      95, all a11y 100, CLS 0.000 everywhere. The homepage is 92 under real
+      throttling; under the default simulated mode it reads 85–90 and swings
+      78–92 on a loaded machine, which is the same instrument problem as the
+      LCP figure — see the note below.
+- [x] LCP < 2.5s on every route, verified against observed timings rather than
+      Lighthouse's simulated ones. Homepage **1.17s** at 4x CPU, 1.42s under
+      real throttling.
 - [ ] **needs a device** — Both themes audited on a real Android device, not
       just a desktop emulator.
 - [x] Reduced-motion pass on every page. Asserted on all eight routes: nothing
@@ -404,29 +415,44 @@ The ordered procedure for every domain-dependent item is in `LAUNCH.md`.
 
 ### The homepage LCP
 
-Measured on the deployed site on a quiet machine: 2.62–2.83s in six runs of
-seven, with one at 1.23s. It does not track machine load, so the S6 reading
-that called it contention was wrong.
+**Resolved in S8: there is no LCP problem. The number was the instrument.**
 
-The LCP element is the `<h1>`, which is in the server-rendered HTML. Its
-`Load Delay` and `Load Time` are both 0ms — nothing is being fetched for it.
-The whole cost is `Render Delay`: 479ms on the fast run, ~2000ms on the slow
-ones, with LCP landing immediately after a 330–500ms hydration long task. The
-three static routes share the same shell and reach LCP at ~1.2s, and the
-homepage document executes 664ms of script against `/privacy`'s 430ms.
+S7 read 2.76s from Lighthouse and concluded the cost was homepage hydration.
+That was wrong, and the correction matters more than the original finding.
 
-So the cost is homepage hydration, and the two things to try, in order:
+Lighthouse's default `--throttling-method=simulate` does not measure LCP. It
+loads the page unthrottled and models what a slow connection would have done.
+In the same run that reported 2.72s, its own trace observed **0.71s**. The
+browser records one LCP candidate, the `<h1>`, at exactly FCP — it paints once
+and is never re-painted.
 
-1. Gate `ProblemFirst` (seven tabs) and `TechnologyEcosystem` (eight panels)
-   behind intersection-triggered dynamic imports. Both are below the fold and
-   both hydrate eagerly today. The pattern is already proven in
-   `hero-node-graph-animator.tsx`.
-2. Give `StatusLine` a server-rendered placeholder with identical dimensions.
-   It sits directly under the `<h1>` and swaps content after an idle fetch,
-   which is the most likely trigger for a second LCP candidate on that element.
+Four experiments, each of which should have moved the number if hydration were
+the cause, and none of which did:
 
-Neither was done in S7: both change how the homepage renders and would need
-their own verification pass rather than a change made on the last day.
+| Experiment                                               | Simulated LCP |
+| -------------------------------------------------------- | ------------- |
+| Baseline                                                 | 2.72s         |
+| `ProblemFirst` + `TechnologyEcosystem` hydration removed | no change     |
+| Both sections deleted from the page entirely             | 3.23s → 3.21s |
+| `StatusLine` removed from the hero                       | 3.23s → 3.24s |
+| **Every JavaScript chunk blocked**                       | **2.71s**     |
+
+Blocking all JavaScript is the one that settles it: with nothing to hydrate,
+the figure does not move. Fonts blocked gives 2.63s, so it is not fonts either.
+
+Measured properly, on the deployed site:
+
+- `pnpm verify:lcp` (real Chrome, 4x CPU): **1168ms**, one candidate, at FCP.
+- Lighthouse `--throttling-method=devtools`: **1.42s** median, range 1.36–1.46,
+  perf 92, CLS 0.000.
+
+Both comfortably inside the §6 ceiling.
+
+What is real, and separate: the homepage carries ~330ms of TBT against
+`/privacy`'s ~240ms, and the probes showed deferring those two sections'
+hydration would cut it by roughly 40%. That is worth doing for INP and for the
+mid-range Android in §6 — but it is a TBT change, not an LCP one, and nothing
+should be scoped against the simulated LCP figure again.
 
 ---
 
@@ -444,6 +470,22 @@ their own verification pass rather than a change made on the last day.
 - Comparative performance measurements are interleaved, never consecutive blocks per
   subject. Report the median paired difference, not the difference of medians.
 - `.env.example` documents every variable the app reads and its fallback behaviour.
+- A metric is not a measurement until you know which one it is. Lighthouse's
+  headline LCP is simulated, not observed, and the two disagreed by 2 seconds on
+  the homepage — in the same run, from the same trace. A whole session was
+  scoped to fix a number that no application change could move, and the thing
+  that settled it was blocking all JavaScript and watching the figure stay where
+  it was. Before optimising against any number, establish what it is derived
+  from and find the cheapest experiment that would falsify the diagnosis.
+- Probe the ceiling before paying for the work. Deleting both sections outright
+  proved in one build that the refactor could not succeed; building the refactor
+  first would have taken a day to reach the same conclusion. When a change is
+  expensive and its benefit is a hypothesis, find the crude version that
+  establishes the upper bound — and make sure that crude version cannot cost
+  more than it saves. The first probe here used `ssr: false`, which moved
+  rendering to the client and made the numbers worse rather than better, and was
+  very nearly read as a result.
+
 - Assert PRESENCE as well as uniqueness. "Every route has a distinct og:image"
   passes vacuously when the tag is missing from all of them, which is exactly
   how the homepage shipped without one while its image route happily returned a
