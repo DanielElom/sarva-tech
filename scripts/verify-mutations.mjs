@@ -664,19 +664,33 @@ const MUTATIONS = [
     expect: ['With reduced motion, nothing on any route animates or transitions'],
   },
   {
-    name: 'Below-fold sections deferred with ssr:false, emptying them from the document',
-    file: 'app/(site)/page.tsx',
-    find: "import { ProblemFirst } from '@/components/sections/problem-first';",
-    replace:
-      "import dynamic from 'next/dynamic';\nconst ProblemFirst = dynamic(() => import('@/components/sections/problem-first').then((m) => m.ProblemFirst), { ssr: false });",
-    artefact: "dynamic(() => import('@/components/sections/problem-first')",
-    also: {
-      find: "import { TechnologyEcosystem } from '@/components/sections/technology-ecosystem';",
-      replace:
-        "const TechnologyEcosystem = dynamic(() => import('@/components/sections/technology-ecosystem').then((m) => m.TechnologyEcosystem), { ssr: false });",
-    },
+    name: 'ProblemFirst skips the server render, emptying it from the document',
+    file: 'components/sections/problem-first.tsx',
+    find: `  return (
+    <section data-surface="inverted" aria-labelledby={\`\${baseId}-heading\`}>`,
+    replace: `  if (typeof window === 'undefined') return null;
+
+  return (
+    <section data-surface="inverted" aria-labelledby={\`\${baseId}-heading\`}>`,
+    artefact: "if (typeof window === 'undefined') return null;",
     expect: [
       'All seven stage descriptions are in the server-rendered HTML',
+      'Both section headings survive in the raw document',
+    ],
+  },
+  {
+    name: 'TechnologyEcosystem skips the server render, emptying it from the document',
+    file: 'components/sections/technology-ecosystem.tsx',
+    find: `  return (
+    <section
+      data-surface="inverted"`,
+    replace: `  if (typeof window === 'undefined') return null;
+
+  return (
+    <section
+      data-surface="inverted"`,
+    artefact: "if (typeof window === 'undefined') return null;",
+    expect: [
       'All eight technology categories, with their tool lists, are in the server-rendered HTML',
       'Both section headings survive in the raw document',
     ],
