@@ -213,8 +213,9 @@ const MUTATIONS = [
   {
     name: 'Technology names given the monospace readout on /services',
     file: 'components/sections/service-detail.tsx',
-    find: "                    <dd className=\"measure text-lead mt-1.5\">{service[field.key]}</dd>",
-    replace: "                    <dd className=\"measure readout mt-1.5\">{service[field.key]}</dd>",
+    find: '                    <dd className="measure text-lead mt-1.5">{service[field.key]}</dd>',
+    replace:
+      '                    <dd className="measure readout mt-1.5">{service[field.key]}</dd>',
     artefact: 'className="measure readout mt-1.5"',
     expect: 'No readout treatment inside the service entries',
   },
@@ -230,7 +231,8 @@ const MUTATIONS = [
     name: 'The :target marker reverts to the invisible top border',
     file: 'app/globals.css',
     find: '  .service-entry:target h3 {\n    color: var(--color-accent-text);\n  }',
-    replace: '  .service-entry:target {\n    border-top-color: var(--color-accent-text);\n  }',
+    replace:
+      '  .service-entry:target {\n    border-top-color: var(--color-accent-text);\n  }',
     artefact: '.service-entry:target {\n    border-top-color',
     expect: 'A map node is keyboard focusable and activating it visibly selects',
   },
@@ -348,7 +350,7 @@ const MUTATIONS = [
     file: 'app/api/intake/route.ts',
     find: '  return NextResponse.json({ ok: true, id: data.id }, { status: 201 });',
     replace:
-      "  if (!notified.sent) {\n" +
+      '  if (!notified.sent) {\n' +
       "    return NextResponse.json({ ok: false, error: 'mail failed' }, { status: 502 });\n" +
       '  }\n' +
       '  return NextResponse.json({ ok: true, id: data.id }, { status: 201 });',
@@ -384,9 +386,10 @@ const MUTATIONS = [
   {
     name: 'Draft persistence clobbers the saved answers on mount again',
     file: 'components/sections/intake-flow.tsx',
-    find: '    if (!hydrated || status.state === \'sent\') return;',
+    find: "    if (!hydrated || status.state === 'sent') return;",
     replace: "    if (status.state === 'sent') return;",
-    artefact: "    if (status.state === 'sent') return;\n    try {\n      sessionStorage.setItem",
+    artefact:
+      "    if (status.state === 'sent') return;\n    try {\n      sessionStorage.setItem",
     expect: 'A refresh mid-flow restores the earlier answers',
   },
   {
@@ -507,7 +510,8 @@ const MUTATIONS = [
     name: 'A route silently missing from the sitemap',
     file: 'app/sitemap.ts',
     find: '  return INDEXABLE_ROUTES.map((route) => ({',
-    replace: "  return INDEXABLE_ROUTES.filter((r) => r.path !== '/about').map((route) => ({",
+    replace:
+      "  return INDEXABLE_ROUTES.filter((r) => r.path !== '/about').map((route) => ({",
     artefact: "filter((r) => r.path !== '/about')",
     expect: ['sitemap.xml is reachable and lists exactly the indexable routes'],
   },
@@ -522,7 +526,7 @@ const MUTATIONS = [
   {
     name: 'JSON-LD padded with a founding date and a social profile',
     file: 'components/chrome/structured-data.tsx',
-    find: "    slogan: SITE.tagline,",
+    find: '    slogan: SITE.tagline,',
     replace: `    slogan: SITE.tagline,
     foundingDate: '2023-01-01',
     sameAs: ['https://twitter.com/sarvatech'],`,
@@ -658,6 +662,24 @@ const MUTATIONS = [
     artefact: `    animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;`,
     expect: ['With reduced motion, nothing on any route animates or transitions'],
+  },
+  {
+    name: 'Below-fold sections deferred with ssr:false, emptying them from the document',
+    file: 'app/(site)/page.tsx',
+    find: "import { ProblemFirst } from '@/components/sections/problem-first';",
+    replace:
+      "import dynamic from 'next/dynamic';\nconst ProblemFirst = dynamic(() => import('@/components/sections/problem-first').then((m) => m.ProblemFirst), { ssr: false });",
+    artefact: "dynamic(() => import('@/components/sections/problem-first')",
+    also: {
+      find: "import { TechnologyEcosystem } from '@/components/sections/technology-ecosystem';",
+      replace:
+        "const TechnologyEcosystem = dynamic(() => import('@/components/sections/technology-ecosystem').then((m) => m.TechnologyEcosystem), { ssr: false });",
+    },
+    expect: [
+      'All seven stage descriptions are in the server-rendered HTML',
+      'All eight technology categories, with their tool lists, are in the server-rendered HTML',
+      'Both section headings survive in the raw document',
+    ],
   },
 ];
 
@@ -919,7 +941,9 @@ try {
         skipped: true,
         failures: ['(needs .env.local — not exercised)'],
       });
-      console.log(`  SKIP  ${mutation.name}\n          needs real Supabase credentials; not exercised`);
+      console.log(
+        `  SKIP  ${mutation.name}\n          needs real Supabase credentials; not exercised`,
+      );
       continue;
     }
     apply(mutation);
@@ -969,7 +993,9 @@ try {
      * than riding on its neighbour. ALL of them must fail, not any.
      */
     const expected = Array.isArray(mutation.expect) ? mutation.expect : [mutation.expect];
-    const unfired = expected.filter((want) => !failures.some((name) => name.includes(want)));
+    const unfired = expected.filter(
+      (want) => !failures.some((name) => name.includes(want)),
+    );
     const caught = unfired.length === 0;
     if (!caught) undetected++;
     results.push({ mutation, caught, failures, skipped: false });
@@ -999,7 +1025,9 @@ for (const file of TARGETS) {
   const pristine = readFileSync(snapshotPath(file), 'utf-8');
   const identical = current === pristine;
   if (!identical) dirty++;
-  console.log(`  ${identical ? 'ok  ' : 'FAIL'}  ${file} is byte-identical to its snapshot`);
+  console.log(
+    `  ${identical ? 'ok  ' : 'FAIL'}  ${file} is byte-identical to its snapshot`,
+  );
 }
 for (const mutation of MUTATIONS) {
   if (!mutation.artefact) continue;
@@ -1026,8 +1054,11 @@ else console.log(`\n  Snapshot kept at ${basename(SNAPSHOT_DIR)}/ for recovery.`
 
 console.log('\nSUMMARY');
 for (const { mutation, caught, failures, skipped } of results) {
-  console.log(`  ${skipped ? 'skipped ' : caught ? 'caught  ' : 'MISSED  '}${mutation.name}`);
-  if (!caught) console.log(`            failing instead: ${failures.join(' | ') || 'nothing'}`);
+  console.log(
+    `  ${skipped ? 'skipped ' : caught ? 'caught  ' : 'MISSED  '}${mutation.name}`,
+  );
+  if (!caught)
+    console.log(`            failing instead: ${failures.join(' | ') || 'nothing'}`);
 }
 console.log(
   `\n  ${undetected === 0 ? 'Every check caught its own defect.' : `${undetected} check(s) did NOT catch their defect`}` +

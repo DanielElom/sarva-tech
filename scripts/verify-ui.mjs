@@ -2210,7 +2210,14 @@ try {
   const allPresent = (field) => seo.filter((row) => !row[field]).map((row) => row.route);
   const allUnique = (field) => new Set(seo.map((row) => row[field])).size === seo.length;
 
-  for (const field of ['title', 'description', 'canonical', 'ogTitle', 'ogUrl', 'ogImage']) {
+  for (const field of [
+    'title',
+    'description',
+    'canonical',
+    'ogTitle',
+    'ogUrl',
+    'ogImage',
+  ]) {
     const missing = allPresent(field);
     check(
       `Every route has a ${field}, and every one is unique`,
@@ -2260,28 +2267,36 @@ try {
   const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(ORIGIN);
   check(
     'Every canonical resolves to one origin, and on a deployed host it is this host',
-    canonicalOrigins.length === 1 && (isLocal || canonicalOrigins[0] === ORIGIN.replace(/\/$/, '')),
+    canonicalOrigins.length === 1 &&
+      (isLocal || canonicalOrigins[0] === ORIGIN.replace(/\/$/, '')),
     isLocal
       ? `${canonicalOrigins[0]} — build-time NEXT_PUBLIC_SITE_URL, not the test port; asserted strictly against a deployed origin`
       : `${canonicalOrigins[0]} vs served from ${ORIGIN}`,
   );
 
   const ogUrlMismatch = seo.filter(
-    (row) => (row.ogUrl ?? '').replace(/\/$/, '') !== (row.canonical ?? '').replace(/\/$/, ''),
+    (row) =>
+      (row.ogUrl ?? '').replace(/\/$/, '') !== (row.canonical ?? '').replace(/\/$/, ''),
   );
   check(
     'og:url agrees with the canonical on every route',
     ogUrlMismatch.length === 0,
     ogUrlMismatch.length
-      ? ogUrlMismatch.map((r) => `${r.route}: og=${r.ogUrl} canonical=${r.canonical}`).join(' | ')
+      ? ogUrlMismatch
+          .map((r) => `${r.route}: og=${r.ogUrl} canonical=${r.canonical}`)
+          .join(' | ')
       : 'all 8 agree',
   );
 
-  const titleLeak = seo.filter((row) => row.route !== '/' && row.ogTitle === seo[0].ogTitle);
+  const titleLeak = seo.filter(
+    (row) => row.route !== '/' && row.ogTitle === seo[0].ogTitle,
+  );
   check(
     'No route inherits the homepage og:title (the shallow-merge trap)',
     titleLeak.length === 0,
-    titleLeak.length ? titleLeak.map((r) => r.route).join(', ') : 'each card carries its own title',
+    titleLeak.length
+      ? titleLeak.map((r) => r.route).join(', ')
+      : 'each card carries its own title',
   );
 
   check(
@@ -2344,8 +2359,11 @@ try {
 
   const sitemapStatuses = [];
   for (const loc of locs) {
-    const res = await fetch(loc.replace(/^https?:\/\/[^/]+/, ORIGIN), { redirect: 'manual' });
-    if (res.status !== 200) sitemapStatuses.push(`${new URL(loc).pathname} -> ${res.status}`);
+    const res = await fetch(loc.replace(/^https?:\/\/[^/]+/, ORIGIN), {
+      redirect: 'manual',
+    });
+    if (res.status !== 200)
+      sitemapStatuses.push(`${new URL(loc).pathname} -> ${res.status}`);
   }
   check(
     'Every URL in the sitemap returns 200 without redirecting',
@@ -2386,7 +2404,9 @@ try {
   }
   check(
     'The JSON-LD parses and describes an Organization',
-    ld !== null && ld['@type'] === 'Organization' && ld['@context'] === 'https://schema.org',
+    ld !== null &&
+      ld['@type'] === 'Organization' &&
+      ld['@context'] === 'https://schema.org',
     ld ? `@type=${ld['@type']}, name=${ld.name}` : `parse failed: ${ldError}`,
   );
 
@@ -2406,18 +2426,19 @@ try {
   check(
     'The JSON-LD claims nothing Sarva Tech cannot currently prove',
     claimed.length === 0,
-    claimed.length ? `present: ${claimed.join(', ')}` : `none of: ${UNVERIFIABLE.join(', ')}`,
+    claimed.length
+      ? `present: ${claimed.join(', ')}`
+      : `none of: ${UNVERIFIABLE.join(', ')}`,
   );
   check(
     'The one contact point in the JSON-LD is the WhatsApp number that exists',
     Boolean(
       ld?.contactPoint?.length === 1 &&
-        ld.contactPoint[0].telephone === '+234 813 393 3217' &&
-        ld.contactPoint[0].url === 'https://wa.me/2348133933217',
+      ld.contactPoint[0].telephone === '+234 813 393 3217' &&
+      ld.contactPoint[0].url === 'https://wa.me/2348133933217',
     ),
     JSON.stringify(ld?.contactPoint ?? null),
   );
-
 
   // -------------------------------------------------------------- /ABOUT --
   console.log('\nABOUT');
@@ -2580,7 +2601,9 @@ try {
   check(
     'No route promises a launch date or timeframe',
     datedPromises.length === 0,
-    datedPromises.length ? datedPromises.join(' | ') : `${SEO_ROUTES.length} routes checked`,
+    datedPromises.length
+      ? datedPromises.join(' | ')
+      : `${SEO_ROUTES.length} routes checked`,
   );
 
   // ------------------------------------------ READOUT DISCIPLINE (4.6) --
@@ -2612,9 +2635,10 @@ try {
   check(
     'Nothing on /start uses monospace at all — a form has no instrumentation on it',
     startMono.mono.length === 0,
-    startMono.mono.length ? `mono text: ${startMono.mono.join(' | ')}` : 'no monospace elements',
+    startMono.mono.length
+      ? `mono text: ${startMono.mono.join(' | ')}`
+      : 'no monospace elements',
   );
-
 
   // ------------------------------------------------- ACCESSIBILITY SWEEP --
   //
@@ -2687,8 +2711,10 @@ try {
         `${route}: main=${found.hasMain} header=${found.hasHeader} nav=${found.hasNav} footer=${found.hasFooter}`,
       );
     }
-    if (found.unnamed.length) a11yProblems.names.push(`${route}: ${found.unnamed.join(', ')}`);
-    if (found.imgsNoAlt.length) a11yProblems.alt.push(`${route}: ${found.imgsNoAlt.join(', ')}`);
+    if (found.unnamed.length)
+      a11yProblems.names.push(`${route}: ${found.unnamed.join(', ')}`);
+    if (found.imgsNoAlt.length)
+      a11yProblems.alt.push(`${route}: ${found.imgsNoAlt.join(', ')}`);
     if (found.lang !== 'en') a11yProblems.lang.push(`${route}: lang=${found.lang}`);
   }
 
@@ -2702,7 +2728,9 @@ try {
   check(
     'Every route has header, nav, main and footer landmarks',
     a11yProblems.landmarks.length === 0,
-    a11yProblems.landmarks.length ? a11yProblems.landmarks.join(' | ') : 'all four on all 8 routes',
+    a11yProblems.landmarks.length
+      ? a11yProblems.landmarks.join(' | ')
+      : 'all four on all 8 routes',
   );
   check(
     'Every visible link and button has an accessible name',
@@ -2712,7 +2740,9 @@ try {
   check(
     'No image is missing an alt attribute',
     a11yProblems.alt.length === 0,
-    a11yProblems.alt.length ? a11yProblems.alt.join(' | ') : 'the site ships no <img> at all',
+    a11yProblems.alt.length
+      ? a11yProblems.alt.join(' | ')
+      : 'the site ships no <img> at all',
   );
   check(
     'The document language is declared on every route',
@@ -2720,7 +2750,80 @@ try {
     a11yProblems.lang.length ? a11yProblems.lang.join(' | ') : 'lang="en"',
   );
 
+  // ------------------------------------------------- SERVER-RENDERED COPY --
+  //
+  // Asserted against the raw HTML from the wire, NOT against the DOM. The DOM
+  // check above passes just as happily when React rendered the content on the
+  // client, and the whole point is that a crawler and a reader without
+  // JavaScript get this copy. S8 probed deferring these two sections' hydration
+  // with `ssr: false`, which silently emptied both of them out of the document
+  // while the page still looked correct in a browser. This is the check that
+  // makes that visible.
+  console.log('\nSERVER-RENDERED CONTENT');
+  const homeHtml = await (await fetch(ORIGIN + '/')).text();
+  const strip = (value) =>
+    value
+      .replace(/<[^>]+>/g, '')
+      .replace(/&#x27;|&#39;|&rsquo;/g, "'")
+      .replace(/&quot;|&ldquo;|&rdquo;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ');
+  const homeText = strip(homeHtml);
 
+  const STAGE_BODIES = [
+    'What&#x27;s actually going wrong',
+    'what constraints are real',
+    'the smallest thing that solves it',
+    'How it works before how it looks',
+    'with the failure modes handled',
+    'on real devices, with real users',
+    'then fixing what the measurement shows',
+  ].map((s) => strip(s).toLowerCase());
+  const missingStages = STAGE_BODIES.filter((s) => !homeText.toLowerCase().includes(s));
+  check(
+    'All seven stage descriptions are in the server-rendered HTML',
+    missingStages.length === 0,
+    missingStages.length
+      ? `missing: ${missingStages.join(' | ')}`
+      : `${STAGE_BODIES.length} descriptions present before any JavaScript runs`,
+  );
+
+  const CATEGORY_NAMES = [
+    'Frontend',
+    'Backend',
+    'Mobile',
+    'Database',
+    'Cloud',
+    'Infrastructure',
+    'Real-time',
+    'AI',
+  ];
+  const CATEGORY_TOOLS = [
+    'React, Next.js, Vue, Nuxt, TypeScript',
+    'Node.js, NestJS, Laravel',
+    'React Native, progressive web apps',
+    'PostgreSQL, Redis, Firebase',
+    'AWS, Vercel, managed infrastructure',
+    'Docker, CI/CD, monitoring',
+    'WebSockets, event streams',
+    'Language models, automation, document processing',
+  ];
+  const missingCats = CATEGORY_NAMES.filter((c) => !homeText.includes(c));
+  const missingTools = CATEGORY_TOOLS.filter((t) => !homeText.includes(t));
+  check(
+    'All eight technology categories, with their tool lists, are in the server-rendered HTML',
+    missingCats.length === 0 && missingTools.length === 0,
+    missingCats.length || missingTools.length
+      ? `missing categories: ${missingCats.join(', ') || 'none'}; missing tool lists: ${missingTools.join(' | ') || 'none'}`
+      : '8 categories and 8 tool lists present before any JavaScript runs',
+  );
+
+  check(
+    'Both section headings survive in the raw document',
+    homeText.includes('Start with the problem.') &&
+      homeText.includes('What we build with.'),
+    'a deferral that empties the document would fail here even though the page still looks right',
+  );
 
   // ---------------------------------------------- REDUCED MOTION, SITEWIDE --
   //
@@ -2761,7 +2864,8 @@ try {
       };
     })()`);
     // 0.01ms is what the backstop clamps to; allow a hair above for rounding.
-    if (seen.longestMs > 1) motionProblems.push(`${route}: ${seen.longestMs}ms on ${seen.worst}`);
+    if (seen.longestMs > 1)
+      motionProblems.push(`${route}: ${seen.longestMs}ms on ${seen.worst}`);
     if (seen.words < 60 || seen.headings < 1) {
       emptyProblems.push(`${route}: ${seen.words} words, ${seen.headings} headings`);
     }
@@ -2847,7 +2951,9 @@ try {
   check(
     'Focusing a control on the new routes produces a visible focus ring',
     focusProblems.length === 0,
-    focusProblems.length ? focusProblems.join(' | ') : 'outline width > 0 on /about, /privacy, /terms',
+    focusProblems.length
+      ? focusProblems.join(' | ')
+      : 'outline width > 0 on /about, /privacy, /terms',
   );
 
   // Both themes, on the new routes: the legal prose must resolve to the
@@ -2870,7 +2976,9 @@ try {
       const wantBg = toRgb(colorTokens['surface-base'][theme]);
       const wantFg = toRgb(colorTokens.primary[theme]);
       if (seen.attr !== theme || seen.bg !== wantBg || seen.h1 !== wantFg) {
-        themeProblems.push(`${route}: bg=${seen.bg} (want ${wantBg}), h1=${seen.h1} (want ${wantFg})`);
+        themeProblems.push(
+          `${route}: bg=${seen.bg} (want ${wantBg}), h1=${seen.h1} (want ${wantFg})`,
+        );
       }
     }
     check(
@@ -2880,7 +2988,6 @@ try {
     );
   }
   await client.eval(`localStorage.setItem('sarva-theme','night')`);
-
 } finally {
   try {
     client?.ws.close();
